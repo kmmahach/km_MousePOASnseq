@@ -1,0 +1,98 @@
+#### Cell ranger count pipeline 
+#### Mouse POA single nuclei sequencing 
+
+###installation
+##install cell ranger: https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/tutorial_in
+## on lambcomp01:/stor/work/Hofmann/All_projects/Mouse_poa_snseq
+#make directory yard
+mkdir yard
+cd yard
+#make directory apps
+mkdir apps
+cd apps
+
+##download cellranger
+#go to downloads page: https://support.10xgenomics.com/single-cell-gene-expression/software/downloads/latest
+#need to do everytime! 
+wget -O cellranger-7.0.1.tar.gz "https://cf.10xgenomics.com/releases/cell-exp/cellranger-7.0.1.tar.gz?Expires=1669954199&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZi4xMHhnZW5vbWljcy5jb20vcmVsZWFzZXMvY2VsbC1leHAvY2VsbHJhbmdlci03LjAuMS50YXIuZ3oiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE2Njk5NTQxOTl9fX1dfQ__&Signature=UGKjS241u4IwTeRoawDldDP8Kj5xEmKoLMZUdJi3HOjRyY18po4tgBCFZhoFdfqRvyi5~SvvGVaPh1E-4JgfJK3-JjlOgSqK3IB3LgFdZeSNq-v3HMqCRNkhXDpdbNjyopD8aAaTJgOBMYa8rJeMRwtQOjcO1z39beXoIp4fgE8Lj~bG5hrj~VPc6FzbqT5OWokM6nNY0ifFZjPEB~ThWtRyrCXV3sNXd8YdaBR~VGWE1EKBptt7rQc2hAiFzzXAilCbhenB5hZEPo1-7NJ3TRxfAE5hUmN1iB8sKR1wOcU24cLU4O99cOudNU7T7GW-MczCbgOc-E~TbyrrcpHM2w__&Key-Pair-Id=APKAI7S6A5RYOXBWRPDA"
+
+#unpack tarball
+tar -xvf cellranger-7.0.1.tar.gz
+
+##add cellranger to path
+export PATH=/stor/work/Hofmann/All_projects/Mouse_poa_snseq/yard/apps/cellranger7.0.1:$PATH
+#add to 
+#check it worked
+which cellranger
+
+##site check 
+##run in scratch
+cd /stor/work/Hofmann/All_projects/Mouse_poa_snseq/
+mkdir test.cellranger
+cd test.cellranger
+#site test
+../yard/apps/cellranger-7.0.1/cellranger sitecheck > sitecheck.txt
+#check results
+less sitecheck.txt
+
+##run test run
+# run on ccbbcomp02.utexas.edu
+# in test.cellranger
+../yard/apps/cellranger-7.0.1/cellranger testrun --id=check_install
+#took ~5 minutes
+#pipestance completed successfully!  
+# remove test folder
+# rm -rf test2.cellranger
+
+### download transcriptome
+## mouse reference from cellranger
+mkdir ref
+cd ref
+wget https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-mm10-2020-A.tar.gz
+tar -xvf refdata-gex-mm10-2020-A.tar.gz
+
+###cell ranger count
+mkdir count
+cd count
+###since already have fastq files can move onto cell ranger count: #https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/tutorial_ct
+#use:
+#--include-introns for nuclei data is set by default
+#--expect-cells=10000 to set target number of nuclei
+
+### males
+## dom male
+#create cellranger count command
+../yard/apps/cellranger-7.0.1/cellranger count --id=MaleDom --transcriptome=../ref/refdata-gex-mm10-2020-A --fastqs=../Data/basespace/MaleDom --sample=MaleDom --expect-cells=10000
+echo "MaleDom done" | mail -s "Send an email with MAIL" imillercrews@utexas.edu
+# start at 11:37 on 12/1/2022
+# end before 15:00 on 12/1/2022
+#~ 3 hours
+
+## sub male
+#create cellranger count command
+../yard/apps/cellranger-7.0.1/cellranger count --id=MaleSub --transcriptome=../ref/refdata-gex-mm10-2020-A --fastqs=../Data/basespace/MaleSub --sample=MaleSub --expect-cells=10000 
+echo "MaleSub done" | mail -s "Send an email with MAIL" imillercrews@utexas.edu
+# start at 15:13 on 12/1/2022
+# end before 17:15 on 12/1/2022
+
+
+### females
+## dom female
+#create cellranger count command
+../yard/apps/cellranger-7.0.1/cellranger count --id=FemaleDom --transcriptome=../ref/refdata-gex-mm10-2020-A --fastqs=../Data/basespace/FemaleDom --sample=FemaleDom --expect-cells=10000
+echo "FemaleDom done" | mail -s "Send an email with MAIL" imillercrews@utexas.edu
+# start at 17:32 on 12/1/2022
+# end before 18:53 on 12/1/2022
+
+## sub female
+#create cellranger count command
+../yard/apps/cellranger-7.0.1/cellranger count --id=FemaleSub --transcriptome=../ref/refdata-gex-mm10-2020-A --fastqs=../Data/basespace/FemaleSub --sample=FemaleSub --expect-cells=10000 
+echo "FemaleSub done" | mail -s "Send an email with MAIL" imillercrews@utexas.edu
+# start at 19:00 on 12/1/2022
+# end before : on 12/1/2022
+
+
+
+
+
+

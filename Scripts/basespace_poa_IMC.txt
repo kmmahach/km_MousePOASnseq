@@ -1,0 +1,82 @@
+ ### Downloading data from BaseSpace
+ ##following directions from: https://developer.basespace.illumina.com/docs/content/documentation/cli/cli-examples
+ ## See also: https://developer.basespace.illumina.com/docs/content/documentation/cli/cli-overview
+ 
+#start new tmux
+tmux new -s poa
+
+#detach 
+# Ctrl+b then d
+#attach 
+#tmux a or tmux a -t poa
+
+#type this in tmux and press 'enter' to get an email when done
+#echo "poa done" | mail -s "Send an email with MAIL" imillercrews@utexas.edu
+#rm -r 'poa done'
+
+## download basespace Linux
+#run on lampcomp01
+cd /stor/work/Hofmann/All_projects/Mouse_poa_snseq/Data
+wget "https://launch.basespace.illumina.com/CLI/latest/amd64-linux/bs"
+
+#give access to run  
+chmod u+x bs
+
+#authenticate basespace if needed
+#./bs auth
+
+#check that basespace is connected 
+./bs whoami
+
+#list projects
+./bs list projects
+
+
+### downloading samples
+## save on lambcomp01
+# lambcomp01:/stor/work/Hofmann/All_projects/Mouse_poa_snseq/Data
+
+#mouse poa sample ID: 374181251 
+#download project
+./bs download project -i 374181251 -o basespace
+
+##move all fastq files to new folders
+##make folders
+# cd /stor/work/Hofmann/All_projects/Mouse_poa_snseq/Data/basespace
+mkdir MaleDom
+mkdir MaleSub
+mkdir FemaleDom
+mkdir FemaleSub
+
+# copy fastq files
+cp SA22196-MaleDom_L001_ds.9c2540e00021442ba4f3f2856a503cd0/MaleDom*.gz MaleDom/.
+cp SA22196-MaleDom_L002_ds.0dabeb6783aa427c9767473c1526ed7f/MaleDom*.gz MaleDom/.
+
+cp SA22196-MaleSub_L001_ds.c52d5dc5f9914824b1b26fe561b7b804/MaleSub*.gz MaleSub/.
+cp SA22196-MaleSub_L002_ds.296ec7e6372a47e796372d6869712f27/MaleSub*.gz MaleSub/.
+
+cp SA22196-FemaleDom_L001_ds.bac77ea607094cc5baf112a2cc5b27ca/FemaleDom*.gz FemaleDom/.
+cp SA22196-FemaleDom_L002_ds.3d32714f5fd64b16af70e6d359635ee0/FemaleDom*.gz FemaleDom/.
+
+cp SA22196-FemaleSub_L001_ds.9e7385aa39fd4f75b76f52d6d6879cb3/FemaleSub*.gz FemaleSub/.
+cp SA22196-FemaleSub_L002_ds.73e1fa8f8b7e4edc81ebf0863230bcdf/FemaleSub*.gz FemaleSub/.
+
+
+
+mkdir fastq
+#copy all fastq files
+cp basespace/SA22049-Burtoni_dom_L001_ds.da4bc8788ac44d218316172f480c5fe7/*fastq.gz fastq/
+cp basespace/SA22049-Burtoni_dom_L002_ds.3b63aa7be1374b04a1af509330f07a47/*fastq.gz fastq/
+cp basespace/SA22049-Burtoni_sub_L001_ds.17cc4d64ec73478593b689b5267441a0/*fastq.gz fastq/
+cp basespace/SA22049-Burtoni_sub_L002_ds.63498b0ce8184f6489b2efe9550b223e/*fastq.gz fastq/
+cp basespace/JA* fastq/
+
+
+## remove leftover folders
+rm -r SA22196-*
+
+
+
+
+
+

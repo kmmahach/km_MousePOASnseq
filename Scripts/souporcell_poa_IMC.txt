@@ -1,0 +1,127 @@
+#### Souporcell pipeline 
+#### Mouse poa single nuclei sequencing 
+#https://github.com/wheaton5/souporcell
+
+### make directory
+## ccbbcomp02
+# all files need to be in the same folder 
+cdw
+cd All_projects/Mouse_poa_snseq/
+mkdir souporcell
+cd souporcell
+
+# reference
+cp -r ../ref/refdata-gex-mm10-2020-A/fasta/ .
+# move fasta files to main directory 
+mv fasta/genome.fa .
+mv fasta/genome.fa.fai .
+
+### note all sample files need to be in the same directory
+
+### copy possorted_genome_bam, index file, and barcodes
+## male
+#dommale
+cp ../count/MaleDom/outs/possorted_genome_bam.bam dommale.bam
+cp ../count/MaleDom/outs/possorted_genome_bam.bam.bai dommale.bam.bai
+cp ../count/MaleDom/outs/filtered_feature_bc_matrix/barcodes.tsv.gz dommales.barcodes.tsv.gz
+# unzip 
+gunzip dommales.barcodes.tsv.gz
+
+#submale
+cp ../count/MaleSub/outs/possorted_genome_bam.bam submale.bam
+cp ../count/MaleSub/outs/possorted_genome_bam.bam.bai submale.bam.bai
+cp ../count/MaleSub/outs/filtered_feature_bc_matrix/barcodes.tsv.gz submales.barcodes.tsv.gz
+# unzip 
+gunzip submales.barcodes.tsv.gz
+
+## female
+#domfemale
+cp ../count/FemaleDom/outs/possorted_genome_bam.bam domfemale.bam
+cp ../count/FemaleDom/outs/possorted_genome_bam.bam.bai domfemale.bam.bai
+cp ../count/FemaleDom/outs/filtered_feature_bc_matrix/barcodes.tsv.gz domfemales.barcodes.tsv.gz
+# unzip 
+gunzip domfemales.barcodes.tsv.gz
+
+#subfemale
+cp ../count/FemaleSub/outs/possorted_genome_bam.bam subfemale.bam
+cp ../count/FemaleSub/outs/possorted_genome_bam.bam.bai subfemale.bam.bai
+cp ../count/FemaleSub/outs/filtered_feature_bc_matrix/barcodes.tsv.gz subfemales.barcodes.tsv.gz
+# unzip 
+gunzip subfemales.barcodes.tsv.gz
+
+
+###installation
+## download singularity image
+## need to run singularity on a compute node
+#check for singularity module
+module spider singularity
+# load module
+module load tacc-singularity/3.7.2
+# check version is >3.0
+singularity --version
+
+# download souporcell
+singularity pull shub://wheaton5/souporcell
+
+
+### run souporcell command
+## options used otherwise default
+#-i BAM, --bam BAM     cellranger bam
+#-b BARCODES, --barcodes BARCODES, barcodes.tsv from cellranger
+#-f FASTA, --fasta FASTA, reference fasta file
+#-t THREADS, --threads THREADS, max threads to use
+#-o OUT_DIR, --out_dir OUT_DIR, name of directory to place souporcell files
+#-k CLUSTERS, --clusters CLUSTERS, number cluster, tbd add easy way to run on a range of k
+
+#singularity exec /path/to/souporcell_latest.sif souporcell_pipeline.py -i /path/to/possorted_genome_bam.bam -b /path/to/barcodes.tsv -f #/path/to/reference.fasta -t num_threads_to_use -o output_dir_name -k num_clusters
+
+##dommale
+singularity exec --bind $WORK/All_projects/Mouse_poa_snseq/souporcell/ souporcell_latest.sif souporcell_pipeline.py -i dommale.bam -b dommales.barcodes.tsv -f genome.fa -t 12 -o dommale_soupercell -k 3
+
+
+## message
+#running souporcell doublet detection
+#running co inference of ambient RNA and cluster genotypes
+#184703 excluded for potential RNA editing
+#3040 doublets excluded from genotype and ambient RNA estimation
+#17674 not used for soup calculation due to possible RNA edit
+#Initial log joint probability = -196881
+#    Iter      log prob        ||dx||      ||grad||       alpha      alpha0  # evals  Notes
+#       4       -196663   0.000825886     0.0757653           1           1        6
+#Optimization terminated normally:
+#  Convergence detected: relative gradient magnitude is below tolerance
+#done
+
+##submale
+singularity exec --bind $WORK/All_projects/Mouse_poa_snseq/souporcell/ souporcell_latest.sif souporcell_pipeline.py -i submale.bam -b submales.barcodes.tsv -f genome.fa -t 12 -o submale_soupercell -k 3
+
+#running souporcell doublet detection
+#running co inference of ambient RNA and cluster genotypes
+#183663 excluded for potential RNA editing
+#2924 doublets excluded from genotype and ambient RNA estimation
+#17009 not used for soup calculation due to possible RNA edit
+#Initial log joint probability = -207927
+#    Iter      log prob        ||dx||      ||grad||       alpha      alpha0  # evals  Notes
+#Exception: log_mix: lambda1 is -nan, but must not be nan!  (in 'unknown file name' at line 73)
+#
+#
+#       5       -184595    0.00834307        1.8388           1           1        9
+#Optimization terminated normally:
+#  Convergence detected: relative gradient magnitude is below tolerance
+#done
+
+##domfemale
+singularity exec --bind $WORK/All_projects/Mouse_poa_snseq/souporcell/ souporcell_latest.sif souporcell_pipeline.py -i domfemale.bam -b domfemales.barcodes.tsv -f genome.fa -t 12 -o domfemale_soupercell -k 3
+
+##subfemale
+singularity exec --bind $WORK/All_projects/Mouse_poa_snseq/souporcell/ souporcell_latest.sif souporcell_pipeline.py -i subfemale.bam -b subfemales.barcodes.tsv -f genome.fa -t 12 -o subfemale_soupercell -k 3
+
+# send email notification
+echo "donefemale" | mail -s "donefemale" imillercrews@gmail.com
+
+
+
+
+
+
+
