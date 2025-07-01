@@ -3,37 +3,45 @@
 # Souporcell output from https://github.com/wheaton5/souporcell, 
 # details found in >txt file 
 
-root.dir <- "/stor/home/kmm7552/KMmPOA_snRNAseq/"
-setwd(paste0(root.dir, "/Scripts/KM_cleanScripts"))
+root.dir <- "/stor/home/kmm7552/km_MousePOASnseq"
+net.dir <- "/stor/work/Hofmann/All_projects/Mouse_poa_snseq/"
+setwd(paste0(root.dir, "/Scripts/km_cleanScripts"))
 
 
 # load functions
-source("./functions/QC_preprocessing_fun.R")
+source("./functions/QC_filtering_fun.R")
 
 # libraries
 lapply(c("tidyverse","Seurat", "collapse"), 
        library, character.only = T)
 
 #### Read in data ####
-# count data
-path <- list.dirs(path = paste0(root.dir, "count"), 
-                  recursive = TRUE, full.names = TRUE)
+## count data
+# path <- list.dirs(path = paste0(root.dir, "count"), 
+#                   recursive = TRUE, full.names = TRUE)
+# l.df <- lapply(ls(pattern="*.data"), \(x) get(x)) # could use for indiv dfs
 
-temp <- list.files(path, pattern="*_matrix", full.names = TRUE)
-l.df <- lapply(temp, \(x) { Read10X(x) })
+# .h5 files on github, or
+# if accessing netdir, then 
+# filtered_feature_bc_matrix directories contain the same data
+
+temp <- list.files(root.dir, pattern="*filtered_feature_bc_matrix.h5", 
+                   recursive = TRUE, full.names = TRUE)
+
+l.df <- lapply(temp, \(x) { Read10X_h5(x) })
 names(l.df) = c("female.dom.data",
                 "female.sub.data",
                 "male.dom.data",
                 "male.sub.data")
 
 # l.df <- l.df[order(names(l.df))] # already in abc order
-save(l.df, file = "./data/rawdata.rda",
-     compress = "xz") # too big for github
 
-# l.df <- lapply(ls(pattern="*.data"), \(x) get(x)) # could use for indiv dfs
+# save(l.df, file = "./data/rawdata.rda",
+#      compress = "xz") # too big for github
+
 
 # souporcell output
-path <- list.files(path = paste0(root.dir, "souporcell"), pattern = "*.tsv",
+path <- list.files(path = paste0(net.dir, "souporcell"), pattern = "*clusters.tsv",
                   recursive = TRUE, full.names = TRUE)
 
 l.clust <- lapply(path, \(x) { read_tsv(x) })
@@ -45,9 +53,12 @@ names(l.clust) = c("female.dom.clusters",
 l.clust <- l.clust[order(names(l.clust))] %>% 
   lapply(\(x) {
     x = x %>%
-      rename(Cell.id = barcode,
-             Doublet = status,
-             Genotype = assignment)
+      rename(cell.id = barcode,
+             doublet = status,
+             indiv_genotype = assignment,
+             indiv1 = cluster0,
+             indiv2 = cluster1,
+             indiv3 = cluster2)
     return(x)
   })
 
@@ -66,20 +77,22 @@ steps = c(3,
         by = 100))
 
 l.df2 <- gene.min.cells.range(l.df, steps)
-  save(l.df2, file = "./data/rawdata_withGeneByCell_counts.rda",
-       compress = "xz") # still too big for github
+  # save(l.df2, file = "./data/rawdata_withGeneByCell_counts.rda",
+  #      compress = "xz") # still too big for github
 
 ## Generate graphs
-  # could probably do this in a prettier way but it works
-mapply("c",l.df2,names(l.df2),SIMPLIFY=FALSE) %>% 
-  lapply(\(x) {
-    names(x)[[4]] = "group"
-    return(x)
-  } 
-    ) -> plotlist
-gene.min.cells.plot(plotlist)
+gene.min.cells.plot(l.df2, "") # autosaves .png in ./QC_filtering if no outdir
 
 ## Seurat QC steps
-l.dfs <- make.seurat.obj(plotlist) # should also work on l.df & l.df2
-  rm(l.df, l.df2, plotlist)
+l.dfs <- make.seurat.obj(l.df) # should work on both l.df and l.df2
 
+# add metadata
+l.dfs <- mapply(AddMetaData, l.dfs, l.clust)
+  # rm(l.df, l.df2, l.clust) # save space in env
+
+# label mitochondrial genes
+l.dfs <- lapply(l.dfs, \(x) {
+    PercentageFeatureSet(x, pattern = "^mt-",
+                         col.name = "percent.mt") } )
+
+                 

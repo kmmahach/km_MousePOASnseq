@@ -1,7 +1,15 @@
 #### functions ####
 
+# get names of list elements for plotting
+namelist <- \(...) {
+  group <- as.list(do.call("names", list(...))) 
+  return(group)
+}
+
 # plot min cell range of genes by number of cells w/ expression
 gene.min.cells.range <- function(list_of_dgCMatrices, steps_vector) { 
+  stopifnot("`list_of_dgCMatrices` must be a list" = is.list(list_of_dgCMatrices))
+  
   lapply(list_of_dgCMatrices, (\(x) {
       temp.m <- matrix(0, nrow = length(steps), ncol = 2)
   
@@ -25,11 +33,16 @@ gene.min.cells.range <- function(list_of_dgCMatrices, steps_vector) {
   ))
 }
 
-gene.min.cells.plot <- function(list_with_minCells) { 
-  
-  lapply(list_with_minCells, (\(x) {
+gene.min.cells.plot <- function(list_with_minCells, outdir) { 
+  directory = outdir
+  stopifnot("`list_with_minCells` must be a list" = is.list(list_with_minCells))
     
-    title <- gsub('.{5}$', '', x[["group"]])
+  newlist = mapply("c",list_with_minCells,
+                   namelist(list_with_minCells),SIMPLIFY=FALSE)
+  
+    lapply(newlist, (\(x) {
+      
+    title <- gsub('.{5}$', '', x[[length(x)]])
     df <- data.frame(cbind(x[["min.cells"]], x[["gene.count"]]))
     colnames(df) <- c("min.cells", "gene.count")
   
@@ -44,21 +57,28 @@ gene.min.cells.plot <- function(list_with_minCells) {
                 max(df$gene.count)) +
                 theme_classic() +
                 ggtitle(paste(title)) )
-        
-    directory <- list.dirs(paste0(root.dir, "QC_filtering"))
+    
+    if (file.exists(directory)) {
+      plotname <- paste0(directory, 
+                         "min.cells", 
+                         title, ".png")
+    } else {
+      message("outdir is not a directory; plot saving to /QC_filtering")
+      
+      directory <- list.dirs(paste0(root.dir, "/QC_filtering"))
   
       if (length(grep(title, directory)) > 0) {
         plotname <- paste0(root.dir, 
-                           "QC_filtering/", 
+                           "/QC_filtering/", 
                            title, 
                            "/min.cells.", 
                            title, ".png")
     } else {  
         plotname <- paste0(root.dir,
-                           "QC_filtering/min.cells.", 
+                           "/QC_filtering/min.cells.", 
                            title, ".png") 
       }
-
+    }
     ggsave(plotname,
            units = "in", 
            width = 10, 
@@ -69,29 +89,52 @@ gene.min.cells.plot <- function(list_with_minCells) {
   ))
 }
 
+
 make.seurat.obj <- function(list_of_dgCMatrices) { 
-  lapply(list_of_dgCMatrices, (\(x) {
-      if ({class(x)=="dgCMatrix"}) {
-         CreateSeuratObject(counts = x, 
-                            project = paste(deparse(substitute(x))),
-                            min.cells = 3,
-                            min.features = 200) -> x 
-          return(x) 
+  stopifnot("`list_of_dgCMatrices` must be a list" = is.list(list_of_dgCMatrices))
+    # group = namelist(list_of_dgCMatrices)
+    newlist = mapply("c",list_of_dgCMatrices,
+                     namelist(list_of_dgCMatrices),SIMPLIFY=FALSE)
+  
+  lapply(newlist, (\(x) {
+    
+    proj.name <- x[[length(x)]]
+    x = x[-length(x)]
+    
+    if ({class(x)=="dgCMatrix"}) {
+      
+        CreateSeuratObject(counts = x, 
+                           project = paste(proj.name),
+                           min.cells = 3,
+                           min.features = 200) -> x 
+        return(x) 
+        
     } else {
+      
+      cts <- get_elem(x, \(x){class(x)=="dgCMatrix"}, 
+                      recursive = TRUE, keep.class = TRUE)
+      
         if(require("collapse")) {
-           
-          CreateSeuratObject(counts = get_elem(x, \(x){class(x)=="dgCMatrix"}, 
-                                         recursive = TRUE, keep.class = TRUE), 
-                             project = paste(deparse(substitute(x))),
+          
+          CreateSeuratObject(counts = cts, 
+                             project = paste(proj.name),
                              min.cells = 3,
                              min.features = 200) -> x 
-            return(x) 
+          return(x) 
         
       } else {
-         print("trying to install collapse")
+         message("trying to install collapse")
          install.packages("collapse")
+         
             if(require(collapse)){
-              print("collapse installed and loaded")
+              message("collapse installed and loaded")
+              
+              CreateSeuratObject(counts = cts, 
+                                 project = paste(proj.name),
+                                 min.cells = 3,
+                                 min.features = 200) -> x 
+              return(x) 
+              
           } else {
              stop("could not install collapse")
            } 
@@ -100,6 +143,7 @@ make.seurat.obj <- function(list_of_dgCMatrices) {
      }
   ))
 }
+
 
 ### modify gene_sets_prepare function to integrate with user added data
 ## do not require xlsx for gene_sets_prepare
