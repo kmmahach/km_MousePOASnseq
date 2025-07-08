@@ -145,6 +145,119 @@ make.seurat.obj <- function(list_of_dgCMatrices) {
 }
 
 
+plot.qc.metrics <- function(list_of_SeuratObj, outdir) {
+  directory = outdir
+  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
+  
+  lapply(list_of_SeuratObj, (\(x) {
+    
+    title <- gsub('.{5}$', '', x@project.name)
+    
+    show(VlnPlot(x,
+            features = c("nFeature_RNA",
+                         "nCount_RNA",
+                         "percent.mt"),
+            ncol = 3) )
+    
+    if (file.exists(directory)) {
+      plotname <- paste0(directory, 
+                         "feature.count.mito.QC", 
+                         title, ".png")
+    } else {
+      message("outdir is not a directory; plot saving to /QC_filtering")
+      
+      directory <- list.dirs(paste0(root.dir, "/QC_filtering"))
+      
+      if (length(grep(title, directory)) > 0) {
+        plotname <- paste0(root.dir, 
+                           "/QC_filtering/", 
+                           title, 
+                           "/feature.count.mito.QC", 
+                           title, ".png")
+      } else {  
+        plotname <- paste0(root.dir,
+                           "/QC_filtering/feature.count.mito.QC.", 
+                           title, ".png") 
+      }
+    }
+    ggsave(plotname,
+           units = "in", 
+           width = 10, 
+           height = 10, 
+           bg = "white")
+    
+  }
+  ))
+}
+
+plot.doublets.qc <- function(list_of_SeuratObj, outdir) {
+  directory = outdir
+  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
+  
+  lapply(list_of_SeuratObj, (\(x) {
+    
+    title <- gsub('.{5}$', '', x@project.name)
+    
+    vln <- VlnPlot2(x, 
+             features = c("nFeature_RNA",
+                          "nCount_RNA",
+                          "percent.mt"),
+             group.by = "doublet", 
+             scales = "free_y", 
+             ncol = 3, nrow = 3) +
+      theme(legend.position = "none") +
+      ggtitle(paste(title)) 
+    
+    if(require("SeuratExtend")) {
+      show(vln)
+      
+    } else {
+      message("trying to install SeuratExtend")
+        if (!requireNamespace("remotes", quietly = TRUE)) {
+          install.packages("remotes")
+        }
+        remotes::install_github("huayc09/SeuratExtend")
+      
+      if(require(SeuratExtend)){
+        message("SeuratExtend installed and loaded")
+        show(vln)
+        
+      } else {
+        stop("could not install SeuratExtend")
+      }
+    }
+
+    if (file.exists(directory)) {
+      plotname <- paste0(directory, 
+                         "doublets.QC", 
+                         title, ".png")
+    } else {
+      message("outdir is not a directory; plot saving to /QC_filtering")
+      
+      directory <- list.dirs(paste0(root.dir, "/QC_filtering"))
+      
+      if (length(grep(title, directory)) > 0) {
+        plotname <- paste0(root.dir, 
+                           "/QC_filtering/", 
+                           title, 
+                           "/doublets.QC", 
+                           title, ".png")
+      } else {  
+        plotname <- paste0(root.dir,
+                           "/QC_filtering/doublets.QC.", 
+                           title, ".png") 
+      }
+    }
+    ggsave(plotname,
+           units = "in", 
+           width = 10, 
+           height = 5, 
+           bg = "white")
+    
+    }
+  ))
+}
+
 ### modify gene_sets_prepare function to integrate with user added data
 ## do not require xlsx for gene_sets_prepare
 ## remove checkGeneSymbols function 

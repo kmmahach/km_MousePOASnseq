@@ -12,7 +12,7 @@ setwd(paste0(root.dir, "/Scripts/km_cleanScripts"))
 source("./functions/QC_filtering_fun.R")
 
 # libraries
-lapply(c("tidyverse","Seurat", "collapse"), 
+lapply(c("tidyverse","Seurat", "SeuratExtend", "collapse"), 
        library, character.only = T)
 
 #### Read in data ####
@@ -94,5 +94,10 @@ l.dfs <- mapply(AddMetaData, l.dfs, l.clust)
 l.dfs <- lapply(l.dfs, \(x) {
     PercentageFeatureSet(x, pattern = "^mt-",
                          col.name = "percent.mt") } )
+
+# graph QC metrics
+# violin plots 
+plot.qc.metrics(l.dfs, "")
+plot.doublets.qc(l.dfs, "")
 
                  
