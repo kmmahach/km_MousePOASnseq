@@ -258,6 +258,60 @@ plot.doublets.qc <- function(list_of_SeuratObj, outdir) {
   ))
 }
 
+
+plot.feature.scatter <- function(list_of_SeuratObj, filters) {
+  # directory = outdir
+  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
+  
+  lapply(list_of_SeuratObj, (\(x) {
+    
+    my_filters <- filters[(rownames(filters) %in% x@project.name),]
+    title <- gsub('.{5}$', '', x@project.name)
+    
+    scatter1 <-  FeatureScatter(x,
+                   feature1 = "nCount_RNA",
+                   feature2 = "nFeature_RNA")
+
+    # show(scatter1)
+    
+    scatter2 <- FeatureScatter(subset(x,
+                                      subset = nFeature_RNA < 6000),
+                               feature1 = "nCount_RNA",
+                               feature2 = "nFeature_RNA")+
+      geom_hline(yintercept = my_filters["nFeature_min"])+
+      geom_hline(yintercept = my_filters["nFeature_max"]) +
+      annotate("text", x=0, y=my_filters["nFeature_min"], label=paste(my_filters["nFeature_min"])) +
+      annotate("text", x=0, y=my_filters["nFeature_max"], label=paste(my_filters["nFeature_max"]))
+    
+    show(scatter2)
+    
+    # hist <- x@meta.data %>%
+    #   ggplot(aes(nFeature_RNA))+
+    #   geom_histogram(binwidth = 10) +
+    #   theme_bw() +
+    #   ggtitle(paste0(title, " UMI counts"))  
+    
+    hist <- x@meta.data %>%
+      subset(nFeature_RNA < 6000) %>%
+      mutate(Subset = ifelse(nFeature_RNA > my_filters["nFeature_min"] 
+                           & nFeature_RNA < my_filters["nFeature_max"],
+                           'Keep',
+                           'Remove')) %>%
+      ggplot(aes(nFeature_RNA,
+                 fill = Subset))+
+      geom_histogram(binwidth = 10) +
+      theme_bw() +
+      ggtitle(paste0(title, " UMI counts"))  +
+      scale_fill_manual(values = c('red',
+                                   'black'))
+
+    show(hist)
+    
+    } 
+  ))
+}
+  
+  
 ### modify gene_sets_prepare function to integrate with user added data
 ## do not require xlsx for gene_sets_prepare
 ## remove checkGeneSymbols function 

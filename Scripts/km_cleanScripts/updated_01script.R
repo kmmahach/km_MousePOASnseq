@@ -99,5 +99,21 @@ l.dfs <- lapply(l.dfs, \(x) {
 # violin plots 
 plot.qc.metrics(l.dfs, "")
 plot.doublets.qc(l.dfs, "")
+# choose filter cutoffs 
+filter.categories <- c("nFeature_min", "nFeature_max", "mito.max")
+fdf <- c(700, 1400, 5)
+fsf <- c(700, 1500, 5)
+mdf <- c(700, 3000, 5)
+msf <- c(700, 2500, 5)
+
+filters <- matrix(rbind(fdf,fsf,mdf,msf),
+                  nrow = length(l.dfs),
+                  ncol = length(filter.categories),
+                  dimnames = list(names(l.dfs),
+                                  filter.categories))
+
+
+# visualize
+plot.feature.scatter(l.dfs, filters)
 
                  
