@@ -114,6 +114,6 @@ filters <- matrix(rbind(fdf,fsf,mdf,msf),
 
 
 # visualize
-plot.feature.scatter(l.dfs, filters)
+plot.feature.scatter(l.dfs, filters, "")
 
                  

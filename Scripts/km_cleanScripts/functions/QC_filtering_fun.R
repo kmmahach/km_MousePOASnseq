@@ -259,8 +259,8 @@ plot.doublets.qc <- function(list_of_SeuratObj, outdir) {
 }
 
 
-plot.feature.scatter <- function(list_of_SeuratObj, filters) {
-  # directory = outdir
+plot.feature.scatter <- function(list_of_SeuratObj, filters, outdir) {
+  directory = outdir
   stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
   
   lapply(list_of_SeuratObj, (\(x) {
@@ -270,20 +270,29 @@ plot.feature.scatter <- function(list_of_SeuratObj, filters) {
     
     scatter1 <-  FeatureScatter(x,
                    feature1 = "nCount_RNA",
-                   feature2 = "nFeature_RNA")
+                   feature2 = "nFeature_RNA") +
+      theme(legend.position = "none")
 
     # show(scatter1)
     
     scatter2 <- FeatureScatter(subset(x,
                                       subset = nFeature_RNA < 6000),
                                feature1 = "nCount_RNA",
-                               feature2 = "nFeature_RNA")+
-      geom_hline(yintercept = my_filters["nFeature_min"])+
-      geom_hline(yintercept = my_filters["nFeature_max"]) +
-      annotate("text", x=0, y=my_filters["nFeature_min"], label=paste(my_filters["nFeature_min"])) +
-      annotate("text", x=0, y=my_filters["nFeature_max"], label=paste(my_filters["nFeature_max"]))
+                               feature2 = "nFeature_RNA") +
+      geom_hline(yintercept = my_filters["nFeature_min"],
+                 linetype = "dotted") +
+      geom_hline(yintercept = my_filters["nFeature_max"],
+                 linetype = "dotted") +
+      annotate("text", x=Inf, y=my_filters["nFeature_min"],
+               label=paste(my_filters["nFeature_min"]),
+               vjust = -0.5, hjust = 1) +
+      annotate("text", x=Inf,
+               y=my_filters["nFeature_max"],
+               label=paste(my_filters["nFeature_max"]),
+               vjust = -0.5, hjust = 1) +
+      theme(legend.position = "none")
     
-    show(scatter2)
+    # show(scatter2)
     
     # hist <- x@meta.data %>%
     #   ggplot(aes(nFeature_RNA))+
@@ -301,11 +310,70 @@ plot.feature.scatter <- function(list_of_SeuratObj, filters) {
                  fill = Subset))+
       geom_histogram(binwidth = 10) +
       theme_bw() +
-      ggtitle(paste0(title, " UMI counts"))  +
-      scale_fill_manual(values = c('red',
+      ggtitle("UMI counts")  +
+      scale_fill_manual(values = c('#88e788',
                                    'black'))
 
-    show(hist)
+    # show(hist)
+    
+    if(require(gridExtra)) {
+      grid.arrange(scatter1, scatter2, hist,
+                   ncol = 2, widths = c(1,1.5),
+                   layout_matrix = rbind(c(1, 3),
+                                         c(2, 3)))
+      
+      
+    } else {
+      message("trying to install gridExtra")
+      install.packages("gridExtra")
+      
+      if(require(gridExtra)){
+        message("gridExtra installed and loaded")
+        grid.arrange(scatter1, scatter2, hist,
+                     ncol = 2, widths = c(1,1.5),
+                     layout_matrix = rbind(c(1, 3),
+                                           c(2, 3)))
+        
+      } else {
+        stop("could not install gridExtra")
+      }
+    }
+    
+    if (file.exists(directory)) {
+      plotname <- paste0(directory, 
+                         "feature.scatter.QC", 
+                         title, ".png")
+    } else {
+      message("outdir is not a directory; plot saving to /QC_filtering")
+      
+      directory <- list.dirs(paste0(root.dir, "/QC_filtering"))
+      
+      if (length(grep(title, directory)) > 0) {
+        plotname <- paste0(root.dir, 
+                           "/QC_filtering/", 
+                           title, 
+                           "/feature.scatter.QC", 
+                           title, ".png")
+      } else {  
+        plotname <- paste0(root.dir,
+                           "/QC_filtering/feature.scatter.QC.", 
+                           title, ".png") 
+      }
+    }
+    plots <- arrangeGrob(scatter1, scatter2, hist,
+                         ncol = 2, widths = c(1,1.5),
+                         layout_matrix = rbind(c(1, 3),
+                                               c(2, 3)),
+                         
+                         top = grid::textGrob(paste(title), 
+                               gp=grid::gpar(fontsize=24)))
+    
+    ggsave(plotname,
+           plots,
+           units = "in", 
+           width = 10, 
+           height = 6.5, 
+           bg = "white")
     
     } 
   ))
