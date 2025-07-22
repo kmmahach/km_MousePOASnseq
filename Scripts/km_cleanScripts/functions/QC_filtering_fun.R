@@ -89,7 +89,6 @@ gene.min.cells.plot <- function(list_with_minCells, outdir) {
   ))
 }
 
-
 make.seurat.obj <- function(list_of_dgCMatrices) { 
   stopifnot("`list_of_dgCMatrices` must be a list" = is.list(list_of_dgCMatrices))
     # group = namelist(list_of_dgCMatrices)
@@ -143,7 +142,6 @@ make.seurat.obj <- function(list_of_dgCMatrices) {
      }
   ))
 }
-
 
 plot.qc.metrics <- function(list_of_SeuratObj, outdir) {
   directory = outdir
@@ -258,7 +256,6 @@ plot.doublets.qc <- function(list_of_SeuratObj, outdir) {
   ))
 }
 
-
 plot.feature.scatter <- function(list_of_SeuratObj, filters, outdir) {
   directory = outdir
   stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
@@ -272,8 +269,6 @@ plot.feature.scatter <- function(list_of_SeuratObj, filters, outdir) {
                    feature1 = "nCount_RNA",
                    feature2 = "nFeature_RNA") +
       theme(legend.position = "none")
-
-    # show(scatter1)
     
     scatter2 <- FeatureScatter(subset(x,
                                       subset = nFeature_RNA < 6000),
@@ -292,13 +287,6 @@ plot.feature.scatter <- function(list_of_SeuratObj, filters, outdir) {
                vjust = -0.5, hjust = 1) +
       theme(legend.position = "none")
     
-    # show(scatter2)
-    
-    # hist <- x@meta.data %>%
-    #   ggplot(aes(nFeature_RNA))+
-    #   geom_histogram(binwidth = 10) +
-    #   theme_bw() +
-    #   ggtitle(paste0(title, " UMI counts"))  
     
     hist <- x@meta.data %>%
       subset(nFeature_RNA < 6000) %>%
@@ -314,7 +302,6 @@ plot.feature.scatter <- function(list_of_SeuratObj, filters, outdir) {
       scale_fill_manual(values = c('#88e788',
                                    'black'))
 
-    # show(hist)
     
     if(require(gridExtra)) {
       grid.arrange(scatter1, scatter2, hist,
@@ -356,7 +343,7 @@ plot.feature.scatter <- function(list_of_SeuratObj, filters, outdir) {
                            title, ".png")
       } else {  
         plotname <- paste0(root.dir,
-                           "/QC_filtering/feature.scatter.QC.", 
+                           "/QC_filtering/feature.scatter.QC", 
                            title, ".png") 
       }
     }
@@ -378,8 +365,214 @@ plot.feature.scatter <- function(list_of_SeuratObj, filters, outdir) {
     } 
   ))
 }
+
+check.filters <- function(list_of_SeuratObj, filters, outdir) {
+  directory = outdir
+  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
   
+  lapply(list_of_SeuratObj, (\(x) {
+    
+    my_filters <- filters[(rownames(filters) %in% x@project.name),]
+    title <- gsub('.{5}$', '', x@project.name)
+    
+    x1 <- subset(x, subset = 
+                   nFeature_RNA >= my_filters["nFeature_min"] &
+                   nFeature_RNA <= my_filters["nFeature_max"] &
+                   percent.mt < my_filters["mito.max"] & 
+                   doublet == 'singlet')
+    
+    xsum <- x1@meta.data %>% 
+      summarize(max = max(nFeature_RNA),
+                min = min(nFeature_RNA),
+                median = median(nFeature_RNA),
+                count = n())
+    show(xsum)
+    
+    scatter <- FeatureScatter(x1, 
+                              feature1 = "nCount_RNA",
+                              feature2 = "nFeature_RNA") +
+      theme(legend.position = "none")
+    
+    hist <- x1@meta.data %>%
+      ggplot(aes(nFeature_RNA))+
+      geom_histogram(binwidth = 10) +
+      theme_bw() +
+      ggtitle("filtered UMI counts")
+    
+    
+    if(require(gridExtra)) {
+      grid.arrange(scatter, hist,
+                   ncol = 2, widths = c(1,1.5))
+      
+      
+    } else {
+      message("trying to install gridExtra")
+      install.packages("gridExtra")
+      
+      if(require(gridExtra)){
+        message("gridExtra installed and loaded")
+        grid.arrange(scatter, hist,
+                     ncol = 2, widths = c(1,1.5))
+        
+      } else {
+        stop("could not install gridExtra")
+      }
+    }
+    
+    if (file.exists(directory)) {
+      plotname <- paste0(directory, 
+                         "filtered.feature.scatter.QC", 
+                         title, ".png")
+    } else {
+      message("outdir is not a directory; plot saving to /QC_filtering")
+      
+      directory <- list.dirs(paste0(root.dir, "/QC_filtering"))
+      
+      if (length(grep(title, directory)) > 0) {
+        plotname <- paste0(root.dir, 
+                           "/QC_filtering/", 
+                           title, 
+                           "/filtered.feature.scatter.QC", 
+                           title, ".png")
+      } else {  
+        plotname <- paste0(root.dir,
+                           "/QC_filtering/filtered.feature.scatter.QC", 
+                           title, ".png") 
+      }
+    }
+    plots <- arrangeGrob(scatter, hist,
+                         ncol = 2, widths = c(1,1.5),
+                         
+                         top = grid::textGrob(paste(title), 
+                                              gp=grid::gpar(fontsize=24)))
+    
+    ggsave(plotname,
+           plots,
+           units = "in", 
+           width = 10, 
+           height = 5, 
+           bg = "white")
+    
+    
+  } 
+  ))
+}
+
+make.filtered.seurat <- function(list_of_SeuratObj, filters) {
+  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
   
+  lapply(list_of_SeuratObj, (\(x) {
+    
+    my_filters <- filters[(rownames(filters) %in% x@project.name),]
+    
+    x1 <- subset(x, subset = 
+                   nFeature_RNA >= my_filters["nFeature_min"] &
+                   nFeature_RNA <= my_filters["nFeature_max"] &
+                   percent.mt < my_filters["mito.max"] & 
+                   doublet == 'singlet')
+    return(x1)
+  }
+  ))
+}
+
+find.cluster.range <- function(list_of_SeuratObj, outdir) {
+  directory = outdir
+  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
+  if(require(clustree)) {
+  
+  lapply(list_of_SeuratObj, (\(x) {
+    title <- gsub('.{5}$', '', x@project.name)
+    
+    x = x %>% 
+      SCTransform() %>% 
+      RunPCA() %>% 
+      FindNeighbors(dims = 1:15) %>% 
+      RunUMAP(dims = 1:15)
+    
+    
+    x.clustree <- FindClusters(object = x,
+                               resolution = seq(0,2,0.2))
+    
+    ctx1 <- clustree(x.clustree,
+                     prefix = "SCT_snn_res.") +
+      ggtitle('clusters across resolutions') +
+      guides(edge_colour = FALSE, edge_alpha = FALSE) +
+      theme(legend.position = "bottom") +
+      scale_edge_color_continuous(low = "black",
+                                  high = "black")
+    
+    x.clust.reduced <- FindClusters(object = x,
+                                    resolution = seq(0,1.4,0.2))
+    
+    ctx2 <- clustree(x.clust.reduced,
+                     prefix = "SCT_snn_res.") +
+      ggtitle('reduced resolution range') +
+      guides(edge_colour = FALSE, edge_alpha = FALSE) +
+      theme(legend.position = "bottom") +
+      scale_edge_color_continuous(low = "black",
+                                  high = "black")
+    
+    if(require(gridExtra)) {
+      grid.arrange(ctx1, ctx2,
+                   ncol = 2, widths = c(1,1))
+      
+      
+    } else {
+      message("trying to install gridExtra")
+      install.packages("gridExtra")
+      
+      if(require(gridExtra)){
+        message("gridExtra installed and loaded")
+        grid.arrange(ctx1, ctx2,
+                     ncol = 2, widths = c(1,1))
+        
+      } else {
+        stop("could not install gridExtra")
+      }
+    }
+    
+    if (file.exists(directory)) {
+      plotname <- paste0(directory, 
+                         "clustree.resolution.QC", 
+                         title, ".png")
+    } else {
+      message("outdir is not a directory; plot saving to /QC_filtering")
+      
+      directory <- list.dirs(paste0(root.dir, "/QC_filtering"))
+      
+      if (length(grep(title, directory)) > 0) {
+        plotname <- paste0(root.dir, 
+                           "/QC_filtering/", 
+                           title, 
+                           "/clustree.resolution.QC", 
+                           title, ".png")
+      } else {  
+        plotname <- paste0(root.dir,
+                           "/QC_filtering/clustree.resolution.QC", 
+                           title, ".png") 
+      }
+    }
+    plots <- arrangeGrob(ctx1, ctx2,
+                         ncol = 2, widths = c(1,1),
+                         
+                         top = grid::textGrob(paste(title), 
+                                              gp=grid::gpar(fontsize=24)))
+    
+    ggsave(plotname,
+           plots,
+           units = "in", 
+           width = 15, 
+           height = 5, 
+           bg = "white")
+    } )
+    ) 
+  } else {
+    stop("install clustree package before running")
+  }
+}
+
+
+
 ### modify gene_sets_prepare function to integrate with user added data
 ## do not require xlsx for gene_sets_prepare
 ## remove checkGeneSymbols function 

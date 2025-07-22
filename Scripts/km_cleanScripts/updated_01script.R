@@ -12,7 +12,7 @@ setwd(paste0(root.dir, "/Scripts/km_cleanScripts"))
 source("./functions/QC_filtering_fun.R")
 
 # libraries
-lapply(c("tidyverse","Seurat", "SeuratExtend", "collapse"), 
+lapply(c("tidyverse","Seurat", "SeuratExtend", "collapse", "clustree"), 
        library, character.only = T)
 
 #### Read in data ####
@@ -115,5 +115,10 @@ filters <- matrix(rbind(fdf,fsf,mdf,msf),
 
 # visualize
 plot.feature.scatter(l.dfs, filters, "")
+  make.filtered.seurat(l.dfs, filters) -> fltr.ldfs
+
+# find best cluster resolution?
+find.cluster.range(fltr.ldfs, "")
+
 
                  
