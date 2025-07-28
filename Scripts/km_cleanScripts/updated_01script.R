@@ -158,11 +158,38 @@ l.dfs <- lapply(fltr.ldfs, \(x, dims = c(1:15)) {
                 assay = "SCT")
   }
 )
+
+  # save(l.dfs, file = "./data/filtered_counts.rda",
+  #      compress = "xz") # still too big for github
   
 # find best cluster resolution?
 find.cluster.range(l.dfs, qc_plots_path)
 
-# plot PCA, UMAP, var features
-plot.dim.clust(l.dfs, 1, qc_plots_path)
+# plot PCA, UMAP, var features, and cluster
+  plot.dim.clust(l.dfs, 1, qc_plots_path)
+  
+l.dfs <- lapply(l.dfs, \(x, resolution = 1)
+                FindClusters(x))
 
-                 
+## cell type annotation with ScType
+# libraries 
+lapply(c("dplyr","Seurat","HGNChelper","openxlsx"), 
+       library, character.only = T)
+
+# load gene set preparation function
+  source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/gene_sets_prepare.R")
+# load cell type annotation function
+  source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/sctype_score_.R")
+
+# gene list
+db_ = "https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/ScTypeDB_full.xlsx"
+# set tissue type
+tissue = "Brain" 
+# prepare gene sets
+gs_list = gene_sets_prepare(db_, tissue)
+
+# add cell types to Seurat object clusters
+l.dfs <- annotate.with.sctype(l.dfs, "sctype.ind", qc_plots_path)
+
+  # save(l.dfs, file = "./data/filtered_counts_withScType.rda",
+  #      compress = "xz") # still too big for github

@@ -503,9 +503,6 @@ find.cluster.range <- function(list_of_SeuratObj,
              width = 15, 
              height = 5, 
              bg = "white")
-      
-      
-      return(x)
       } 
     )
   }
@@ -574,6 +571,69 @@ plot.dim.clust <- function(list_of_SeuratObj,
       }
     )
   }
+}
+
+annotate.with.sctype <- function(list_of_SeuratObj,
+                              name = "sctype.ind",
+                              outdir = getwd()) {
+  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
+  
+  lapply(list_of_SeuratObj, \(x) {
+    title <- gsub('.{5}$', '', x@project.name)
+    
+    # from sctype wrapper function
+    # source(https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/sctype_wrapper.R)
+    message(paste0("using ScType wrapper to annotate brain cell types for ", x@project.name))
+    
+    es.max <-  sctype_score(scRNAseqData = x[["SCT"]]$scale.data,
+                            scaled = TRUE, 
+                            gs = gs_list$gs_positive, 
+                            gs2 = gs_list$gs_negative)
+    
+    # Extract top cell types for each cluster
+    cL_resutls = do.call("rbind", lapply(unique(x@meta.data$seurat_clusters), function(cl){
+      es.max.cl = sort(rowSums(es.max[ ,rownames(x@meta.data[x@meta.data$seurat_clusters==cl, ])]), decreasing = !0)
+      head(data.frame(cluster = cl, type = names(es.max.cl), scores = es.max.cl, ncells = sum(x@meta.data$seurat_clusters==cl)), 10)
+    }))
+    sctype_scores = cL_resutls %>% group_by(cluster) %>% top_n(n = 1, wt = scores)  
+    # set low-confident (low ScType score) clusters to "unknown"
+    sctype_scores$type[as.numeric(as.character(sctype_scores$scores)) < sctype_scores$ncells/4] = "Unknown"
+    
+    x@meta.data[name] = ""
+    for(j in unique(sctype_scores$cluster)){
+      cl_type = sctype_scores[sctype_scores$cluster==j,]; 
+      x@meta.data[x@meta.data$seurat_clusters == j,name] = as.character(cl_type$type[1])
+    }
+    
+    #graph umap
+    DimPlot(x, reduction = "umap",
+            group.by = name) +
+      ggtitle(paste(title))
+    
+    if(length(grep(title, list.files(outdir))) > 0) {
+      plotname <- paste0(outdir, "/", title, 
+                         "/sctype.dimplot.", 
+                         title, ".png")
+    } else {
+      
+      if(!is.null(outdir)) {
+        message("outdir not specified; saving plots to working directory")
+      }
+      
+      plotname <- paste0(outdir, "/sctype.dimplot.",
+                         title, ".png")
+      
+    }
+    
+    ggsave(plotname,
+           units = "in", 
+           width = 10, 
+           height = 8, 
+           bg = "white")
+    
+    return(x)
+    }
+  )
 }
 
 
