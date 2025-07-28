@@ -1,5 +1,5 @@
 # R-4.3.1
-# Cell counts output from CellRanger v(?), details found in >txt file 
+# Cell counts output from CellRanger v7.0.1, details found in >txt file 
 # Souporcell output from https://github.com/wheaton5/souporcell, 
 # details found in >txt file 
 
@@ -45,31 +45,30 @@ names(l.df) = c("female.dom.data",
 path <- list.files(paste0(net.dir, "/souporcell"), "*clusters.tsv",
                    recursive = TRUE, full.names = TRUE)
 
-# automated naming:
-  lapply(path, \(x) { read_tsv(x) }) %>% 
-    set_names(
-      str_extract(
-        path, "[^/]+(?=_soupercell)" ) %>% 
-        paste(str_sub(.,4),
-              str_extract(., "[a-z]{1,3}"), 
-              "clusters",
-              sep = ".") %>%
-        sub("[a-z]*.", "", .)) -> l.clust # whew that's not very pretty 
-                                           # but it works
+# automated naming (tidyverse):
+  # lapply(path, \(x) { read_tsv(x) }) %>% 
+  #   set_names(
+  #     str_extract(
+  #       path, "[^/]+(?=_soupercell)" ) %>% 
+  #       paste(str_sub(.,4),
+  #             str_extract(., "[a-z]{1,3}"), 
+  #             "clusters",
+  #             sep = ".") %>%
+  #       sub("[a-z]*.", "", .)) -> l.clust # whew that's not very pretty
+# it works, but data is a tibble
 
-# base r version is even worse:
-  # path |>
-  #   lapply(function(x) read.delim(x, header = TRUE, sep = "\t")) |>
-  #   (\(lst) {
-  #     names(lst) <- paste(
-  #       substring(regmatches(path,
-  #                            regexpr("[^/]+(?=_soupercell)", 
-  #                                    path, perl = TRUE)), 4),
-  #       substr(regmatches(path, regexpr("[^/]+(?=_soupercell)", 
-  #                                       path, perl = TRUE)), 1, 3),
-  #       "clusters", sep = ".")
-  #     lst 
-  #     })() -> l.clust
+# base r version is ugly too, but maybe better:
+  path |>
+    lapply(function(x) read.delim(x, header = TRUE, sep = "\t")) |>
+    (\(lst) {
+      names(lst) <- paste(
+        substring(regmatches(path,
+                             regexpr("[^/]+(?=_soupercell)",
+                                     path, perl = TRUE)), 4),
+        substr(regmatches(path, regexpr("[^/]+(?=_soupercell)",
+                                        path, perl = TRUE)), 1, 3),
+        "clusters", sep = ".") 
+      lst })() -> l.clust
 
 # manual naming:
   # (easy to read but also to make mistakes...)
@@ -79,15 +78,15 @@ path <- list.files(paste0(net.dir, "/souporcell"), "*clusters.tsv",
   #                    "female.sub.clusters",
   #                    "male.sub.clusters")
 
-l.clust[order(names(l.clust))] %>% lapply(\(x) {
+l.clust[order(names(l.clust))] %>% 
+  lapply(\(x) {
     x = x %>%
       rename(cell.id = barcode,
              doublet = status,
              indiv_genotype = assignment,
              indiv1 = cluster0,
              indiv2 = cluster1,
-             indiv3 = cluster2) 
-    }) -> l.clust
+             indiv3 = cluster2) }) -> l.clust
 
 save(l.clust, file = "./data/souporcell_output.rda")
 
@@ -152,10 +151,11 @@ fltr.ldfs <- make.filtered.seurat(l.dfs, filters)
 # dimensionality reduction
 l.dfs <- lapply(fltr.ldfs, \(x, dims = c(1:15)) {
   x = x %>% 
-        SCTransform() %>% 
-        RunPCA() %>% 
-        FindNeighbors(dims = dims) %>% 
-        RunUMAP(dims = dims)
+        SCTransform() %>%
+        RunPCA() %>%
+        FindNeighbors(dims = dims) %>%
+        RunUMAP(dims = dims, 
+                assay = "SCT")
   }
 )
   

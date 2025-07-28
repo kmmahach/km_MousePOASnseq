@@ -25,7 +25,7 @@ gene.min.cells.range <- function(list_of_dgCMatrices,
                                    min.cells = steps[i],
                                    min.features = 700)
     
-      temp.m[i,] = c(steps[i], nrow(temp@assays[["RNA"]]@meta.data))
+      temp.m[i,] = c(steps[i], nrow(temp[["RNA"]]))
         print(paste0("finishing step ", steps[i]))
     
         rm(temp) 
@@ -88,6 +88,7 @@ gene.min.cells.plot <- function(list_with_minCells,
   )
 }
 
+# create seurat objects from dcCMatrices
 make.seurat.obj <- function(list_of_dgCMatrices) { 
   stopifnot("`list_of_dgCMatrices` must be a list" = is.list(list_of_dgCMatrices))
     
@@ -133,6 +134,7 @@ make.seurat.obj <- function(list_of_dgCMatrices) {
   }
 }
 
+# violin plots of features, counts, and percent mito genes
 plot.qc.metrics <- function(list_of_SeuratObj, 
                             outdir = getwd()) {
   stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
@@ -141,9 +143,11 @@ plot.qc.metrics <- function(list_of_SeuratObj,
     
     title <- gsub('.{5}$', '', x@project.name)
     
-    VlnPlot(x, features = c("nFeature_RNA",
-                            "nCount_RNA",
-                            "percent.mt"),
+    VlnPlot(x, assay = "RNA", 
+            layer = "counts",
+            features = c("nFeature_RNA",
+                         "nCount_RNA",
+                         "percent.mt"),
             ncol = 3, combine = TRUE) +
       plot_annotation(paste(title)) &
       theme(axis.title.x = element_blank(),
@@ -572,9 +576,8 @@ plot.dim.clust <- function(list_of_SeuratObj,
   }
 }
 
-  
 
-
+#### from seurat_snseq_mouse_IMC.R ####
 ### modify gene_sets_prepare function to integrate with user added data
 ## do not require xlsx for gene_sets_prepare
 ## remove checkGeneSymbols function 
