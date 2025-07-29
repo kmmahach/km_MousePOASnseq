@@ -52,9 +52,7 @@ int.ldfs %>%
   RunUMAP(reduction = "pca", 
           dims = 1:30) %>% 
   PrepSCTFindMarkers(assay = "SCT") %>% 
-  FindNeighbors(reduction = "pca",
-               dims = 1:30) %>% 
-  FindClusters(resolution = 0.4) -> int.ldfs
+  FindNeighbors(reduction = "pca", dims = 1:30) -> int.ldfs
 
 # check umap
 DimPlot(int.ldfs,
@@ -69,3 +67,5 @@ res.2 = seq(0,0.8,0.2) # reduced range
                      qc_plots_path,
                      int_range1 = res.1,
                      int_range2 = res.2)
+# best res = 0.4 
+int.ldfs <- FindClusters(int.ldfs, resolution = 0.4)
