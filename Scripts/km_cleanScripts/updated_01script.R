@@ -163,7 +163,7 @@ l.dfs <- lapply(fltr.ldfs, \(x, dims = c(1:15)) {
   #      compress = "xz") # still too big for github
   
 # find best cluster resolution?
-find.cluster.range(l.dfs, qc_plots_path)
+  find.cluster.range(l.dfs, qc_plots_path) # use auto resolution ranges
 
 # plot PCA, UMAP, var features, and cluster
   plot.dim.clust(l.dfs, 1, qc_plots_path)

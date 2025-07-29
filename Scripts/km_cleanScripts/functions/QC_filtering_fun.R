@@ -426,8 +426,13 @@ make.filtered.seurat <- function(list_of_SeuratObj,
 }
 
 find.cluster.range <- function(list_of_SeuratObj, 
-                               outdir = getwd()) {
-  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
+                               outdir = getwd(),
+                               int_range1 = seq(0,2,0.2),
+                               int_range2 = seq(0,1.4,0.2)) {
+  
+  if(!is.list(list_of_SeuratObj)) {
+    list_of_SeuratObj <- list(list_of_SeuratObj)
+  }
   
   if(!require(clustree)) {
     message("trying to install clustree")
@@ -445,68 +450,71 @@ find.cluster.range <- function(list_of_SeuratObj,
     if(!require(gridExtra)) {
       stop("install gridExtra package before running")
     }
-    
-  } else {
-    
-    lapply(list_of_SeuratObj, \(x) {
-      
-      title <- gsub('.{5}$', '', x@project.name)
-      
-      x.clustree <- FindClusters(object = x,
-                                 resolution = seq(0,2,0.2))
-      
-      ctx1 <- clustree(x.clustree,
-                       prefix = "SCT_snn_res.") +
-        ggtitle('clusters across resolutions') +
-        guides(edge_colour = "none", edge_alpha = "none") +
-        theme(legend.position = "bottom") +
-        scale_edge_color_continuous(low = "black",
-                                    high = "black")
-      
-      x.clust.reduced <- FindClusters(object = x,
-                                      resolution = seq(0,1.4,0.2))
-      
-      ctx2 <- clustree(x.clust.reduced,
-                       prefix = "SCT_snn_res.") +
-        ggtitle('reduced resolution range') +
-        guides(edge_colour = "none", edge_alpha = "none") +
-        theme(legend.position = "bottom") +
-        scale_edge_color_continuous(low = "black",
-                                    high = "black")
-      
-      if(length(grep(title, list.files(outdir))) > 0) {
-        
-        plotname <- paste0(outdir, "/", title,
-                           "/clustree.resolution.",
-                           title, ".png")
-      } else {
-        
-        if(!is.null(outdir)) {
-          message("outdir not specified; saving plots to working directory")
-        }
-        
-        plotname <- paste0(outdir, "/clustree.resolution.",
-                           title, ".png")
-      } 
-      
-      plots <- arrangeGrob(ctx1, ctx2,
-                           ncol = 2, widths = c(1,1),
-                           
-                           top = grid::textGrob(paste(title), 
-                                                gp=grid::gpar(fontsize=24)))
-      
-      message("**saving plots to outdir**")
-      
-      ggsave(plotname,
-             plots,
-             units = "in", 
-             width = 15, 
-             height = 5, 
-             bg = "white")
-      } 
-    )
   }
+    
+  lapply(list_of_SeuratObj, \(x) {
+    
+    title <- gsub('.{5}$', '', x@project.name)
+    
+    x.clustree <- FindClusters(object = x,
+                               resolution = int_range1)
+    
+    ctx1 <- clustree(x.clustree,
+                     prefix = paste0(x@active.assay, "_snn_res.")) +
+      labs(title = 'clusters across resolutions') +
+      guides(edge_colour = "none", edge_alpha = "none") +
+      theme(legend.position = "bottom",
+            legend.title = element_blank(),
+            plot.title = element_text(hjust = 0.5)) +
+      scale_edge_color_continuous(low = "black",
+                                  high = "black")
+    
+    x.clust.reduced <- FindClusters(object = x,
+                                    resolution = int_range2)
+    
+    ctx2 <- clustree(x.clust.reduced,
+                     prefix = paste0(x@active.assay, "_snn_res.")) +
+      labs(title = 'reduced resolution range') +
+      guides(edge_colour = "none", edge_alpha = "none") +
+      theme(legend.position = "bottom", 
+            legend.title = element_blank(),
+            plot.title = element_text(hjust = 0.5)) +
+      scale_edge_color_continuous(low = "black",
+                                  high = "black")
+    
+    if(length(grep(title, list.files(outdir))) > 0) {
+      
+      plotname <- paste0(outdir, "/", title,
+                         "/clustree.resolution.",
+                         title, ".png")
+    } else {
+      
+      if(!is.null(outdir)) {
+        message("outdir not specified; saving plots to working directory")
+      }
+      
+      plotname <- paste0(outdir, "/clustree.resolution.",
+                         title, ".png")
+    } 
+    
+    plots <- arrangeGrob(ctx1, ctx2,
+                         ncol = 2, widths = c(1,1),
+                         
+                         top = grid::textGrob(paste(title), 
+                                              gp=grid::gpar(fontsize=24)))
+    
+    message("**saving plots to outdir**")
+    
+    ggsave(plotname,
+           plots,
+           units = "in", 
+           width = 17, 
+           height = 6.5, 
+           bg = "white")
+    } 
+  )
 }
+
 
 plot.dim.clust <- function(list_of_SeuratObj, 
                            res = 1, 
