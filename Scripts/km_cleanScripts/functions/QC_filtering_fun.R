@@ -8,50 +8,64 @@ namelist <- \(...) {
 
 # plot min cell range of genes by number of cells w/ expression
 gene.min.cells.range <- function(list_of_dgCMatrices, 
-                                 steps_vector, 
+                                 steps_vector = NULL, 
                                  min.features = 700) { 
+  if(is.null(steps_vector)) {
+    stop("input required for `steps_vector`")
+  }
   
-  stopifnot("`list_of_dgCMatrices` must be a list" = is.list(list_of_dgCMatrices))
   stopifnot("`steps_vector` must be numeric" = is.numeric(steps_vector))
-  stopifnot("`steps_vector` must be a vector" = is.vector(steps_vector))
   
-  lapply(list_of_dgCMatrices, \(x) {
-      temp.m <- matrix(0, nrow = length(steps), ncol = 2)
+  if(!is.vector(steps_vector)) {
+    steps_vector <- as.vector(steps_vector)
+  }
   
-        for(i in 1:length(steps)) {
+  if(!is.list(list_with_minCells)) {
+    list_with_minCells <- list(list_with_minCells)
+  }
+  
+  steps.loop <- \(x) {
+    temp.m <- matrix(0, nrow = length(steps), ncol = 2)
     
-        temp <- CreateSeuratObject(counts = x,
-                                   project = "temp",
-                                   min.cells = steps[i],
-                                   min.features = 700)
-    
+    for(i in 1:length(steps)) {
+      
+      temp <- CreateSeuratObject(counts = x,
+                                 project = "temp",
+                                 min.cells = steps[i],
+                                 min.features = 700)
+      
       temp.m[i,] = c(steps[i], nrow(temp[["RNA"]]))
-        print(paste0("finishing step ", steps[i]))
-    
-        rm(temp) 
-       }
-
-      temp.df <- data.frame(temp.m)
-      colnames(temp.df) <- c("min.cells", "gene.count")
-      append(x, temp.df)
+      print(paste0("finishing step ", steps[i]))
+      
+      rm(temp) 
     }
-  )
+    
+    temp.df <- data.frame(temp.m)
+    colnames(temp.df) <- c("min.cells", "gene.count")
+    append(x, temp.df)
+  }
+  
+  lapply(list_of_dgCMatrices, steps.loop)
 }
 
 gene.min.cells.plot <- function(list_with_minCells, 
-                                outdir = getwd()) {
+                                outdir = NULL) {
   
-  stopifnot("`list_with_minCells` must be a list" = is.list(list_with_minCells))
+  if(!is.list(list_with_minCells)) {
+    list_with_minCells <- list(list_with_minCells)
+  }
   
-  newlist = mapply("c",list_with_minCells,
-                   namelist(list_with_minCells),SIMPLIFY=FALSE)
+  newlist = mapply("c",
+                   list_with_minCells,
+                   namelist(list_with_minCells),
+                   SIMPLIFY=FALSE)
   
-  lapply(newlist, \(x) {
+  generate.graphs <- \(x) {
     
     title <- gsub('.{5}$', '', x[[length(x)]])
     df <- data.frame(cbind(x[["min.cells"]], x[["gene.count"]]))
     colnames(df) <- c("min.cells", "gene.count")
-  
+    
     ggplot(df,aes(x = min.cells,
                   y = gene.count,
                   label = paste(min.cells,
@@ -62,21 +76,23 @@ gene.min.cells.plot <- function(list_with_minCells,
       ylim(0,max(df$gene.count)) +
       theme_classic() +
       ggtitle(paste(title)) 
-         
+    
     
     if(length(grep(title, list.files(outdir))) > 0) {
+      
       plotname <- paste0(outdir, "/", title, 
                          "/min.cells.", 
                          title, ".png")
-    } else {
       
-      if(!is.null(outdir)) {
+      } else if(!is.null(outdir)) {
+        plotname <- paste0(outdir, "/min.cells.",
+                           title, ".png")
+      } else {
         message("outdir not specified; saving plots to working directory")
-        }
-      
-      plotname <- paste0(outdir, "/min.cells.",
-                         title, ".png")
-      
+        
+        plotname <- paste0(getwd(), "/min.cells.",
+                           title, ".png")
+        
       }
     
     ggsave(plotname,
@@ -85,61 +101,69 @@ gene.min.cells.plot <- function(list_with_minCells,
            height = 10, 
            bg = "white")
     }
-  )
+  
+  lapply(newlist, generate.graphs)
 }
 
 # create seurat objects from dcCMatrices
 make.seurat.obj <- function(list_of_dgCMatrices) { 
-  stopifnot("`list_of_dgCMatrices` must be a list" = is.list(list_of_dgCMatrices))
+  
+  if(!is.list(list_of_dgCMatrices)) {
+    list_of_dgCMatrices <- list(list_of_dgCMatrices)
+  }
+  
+  if(!require(collapse)) {
+    message("trying to install collapse")
+    install.packages("collapse")
     
     if(!require(collapse)) {
-      message("trying to install collapse")
-      install.packages("collapse")
-      
-      if(!require(collapse)) {
-        stop("install collapse package before running")
+      stop("install collapse package before running")
       }
+    }
+      
+  newlist = mapply("c",
+                   list_of_dgCMatrices,
+                   namelist(list_of_dgCMatrices),
+                   SIMPLIFY=FALSE)
+      
+  make.obj <- \(x) {
+        
+    proj.name = x[[length(x)]]
+    x = x[-length(x)]
+    
+    if ({class(x)=="dgCMatrix"}) {
+      
+      CreateSeuratObject(counts = x,
+                         project = paste(proj.name),
+                         min.cells = 3,
+                         min.features = 200) -> x 
+      return(x) 
       
     } else {
       
-      newlist = mapply("c",list_of_dgCMatrices,
-                       namelist(list_of_dgCMatrices),SIMPLIFY=FALSE)
-  
-      lapply(newlist, \(x) {
+      get_elem(x, \(x){class(x)=="dgCMatrix"},
+               recursive = TRUE, keep.class = TRUE) -> cts
       
-        proj.name = x[[length(x)]]
-        x = x[-length(x)]
-        
-        if ({class(x)=="dgCMatrix"}) {
-          
-          CreateSeuratObject(counts = x,
-                             project = paste(proj.name),
-                             min.cells = 3,
-                             min.features = 200) -> x 
-          return(x) 
-          
-        } else {
-      
-          get_elem(x, \(x){class(x)=="dgCMatrix"},
-                   recursive = TRUE, keep.class = TRUE) -> cts
-    
-          CreateSeuratObject(counts = cts, 
-                             project = paste(proj.name),
-                             min.cells = 3,
-                             min.features = 200) -> x
-          return(x)
-        }
-      }
-    )
+      CreateSeuratObject(counts = cts, 
+                         project = paste(proj.name),
+                         min.cells = 3,
+                         min.features = 200) -> x
+      return(x)
+    }
   }
+  
+  lapply(newlist, make.obj)
 }
 
 # violin plots of features, counts, and percent mito genes
 plot.qc.metrics <- function(list_of_SeuratObj, 
-                            outdir = getwd()) {
-  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
+                            outdir = NULL) {
   
-  lapply(list_of_SeuratObj, \(x) {
+  if(!is.list(list_of_SeuratObj)) {
+    list_of_SeuratObj <- list(list_of_SeuratObj)
+  }
+  
+  generate.graphs <- \(x) {
     
     title <- gsub('.{5}$', '', x@project.name)
     
@@ -157,18 +181,19 @@ plot.qc.metrics <- function(list_of_SeuratObj,
                                       face = "bold",
                                       hjust = 0.5)) 
     
-    
     if(length(grep(title, list.files(outdir))) > 0) {
+      
       plotname <- paste0(outdir, "/", title, 
-                         "/feature.count.mito.", 
+                         "/min.cells.", 
+                         title, ".png")
+      
+    } else if(!is.null(outdir)) {
+      plotname <- paste0(outdir, "/min.cells.",
                          title, ".png")
     } else {
+      message("outdir not specified; saving plots to working directory")
       
-      if(!is.null(outdir)) {
-        message("outdir not specified; saving plots to working directory")
-      } 
-      
-      plotname <- paste0(outdir, "/feature.count.mito.",
+      plotname <- paste0(getwd(), "/min.cells.",
                          title, ".png")
     }
     
@@ -177,13 +202,16 @@ plot.qc.metrics <- function(list_of_SeuratObj,
            width = 10, 
            height = 10, 
            bg = "white")
-    }
-  )
+  }
+  
+  lapply(list_of_SeuratObj, generate.graphs)
 }
 
 plot.doublets.qc <- function(list_of_SeuratObj, 
-                             outdir = getwd()) {
-  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
+                             outdir = NULL) {
+  if(!is.list(list_of_SeuratObj)) {
+    list_of_SeuratObj <- list(list_of_SeuratObj)
+  }
   
   if(!require(SeuratExtend)) {
     message("trying to install SeuratExtend")
@@ -195,54 +223,61 @@ plot.doublets.qc <- function(list_of_SeuratObj,
     if(!require(SeuratExtend)) {
       stop("install SeuratExtend package before running")
     }
-  } else {
+  }
+  
+  generate.graphs <- \(x) {
     
-    lapply(list_of_SeuratObj, \(x) {
+    title <- gsub('.{5}$', '', x@project.name)
+    
+    VlnPlot2(x,
+             features = c("nFeature_RNA",
+                          "nCount_RNA",
+                          "percent.mt"),
+             group.by = "doublet", 
+             scales = "free_y", 
+             ncol = 3, nrow = 3) +
+      theme(legend.position = "none") +
+      ggtitle(paste(title))
+    
+    if(length(grep(title, list.files(outdir))) > 0) {
       
-      title <- gsub('.{5}$', '', x@project.name)
-      
-      VlnPlot2(x,
-               features = c("nFeature_RNA",
-                            "nCount_RNA",
-                            "percent.mt"),
-               group.by = "doublet", 
-               scales = "free_y", 
-               ncol = 3, nrow = 3) +
-        theme(legend.position = "none") +
-        ggtitle(paste(title))
-      
-      if(length(grep(title, list.files(outdir))) > 0) {
-        
-        plotname <- paste0(outdir, "/", title,
-                           "/doublets.",
-                           title, ".png")
-        
-        } else {
-          
-          if(!is.null(outdir)) {
-            message("outdir not specified; saving plots to working directory")
-          } 
-          
-          plotname <- paste0(outdir, "/doublets.",
+      plotname <- paste0(outdir, "/", title, 
+                         "/min.cells.", 
                          title, ".png")
-          }
       
-      ggsave(plotname,
+    } else if(!is.null(outdir)) {
+      plotname <- paste0(outdir, "/min.cells.",
+                         title, ".png")
+    } else {
+      message("outdir not specified; saving plots to working directory")
+      
+      plotname <- paste0(getwd(), "/min.cells.",
+                         title, ".png")
+    }
+    
+    ggsave(plotname,
            units = "in", 
            width = 10, 
            height = 5, 
            bg = "white")
-      }
-    )
   }
+  
+  lapply(list_of_SeuratObj, generate.graphs)
 }
 
 plot.feature.scatter <- function(list_of_SeuratObj, 
                                  filters, 
-                                 outdir = getwd()) {
+                                 outdir = NULL) {
   
-  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
   stopifnot("`filters` must be numeric" = is.numeric(filters))
+  
+  if(!is.matrix(filters)) {
+    filters <- as.matrix(filters)
+  }
+  
+  if(!is.list(list_of_SeuratObj)) {
+    list_of_SeuratObj <- list(list_of_SeuratObj)
+  }
   
   if(!require(gridExtra)) {
     message("trying to install gridExtra")
@@ -250,91 +285,99 @@ plot.feature.scatter <- function(list_of_SeuratObj,
     
     if(!require(collapse)) {
       stop("install gridExtra package before running")
-      }
-    
-    } else {
-      
-      lapply(list_of_SeuratObj, \(x) {
-        
-        my_filters <- filters[(rownames(filters) %in% x@project.name),]
-        title <- gsub('.{5}$', '', x@project.name)
-        
-        scatter1 <-  FeatureScatter(x,
-                                    feature1 = "nCount_RNA",
-                                    feature2 = "nFeature_RNA") +
-          theme(legend.position = "none")
-        
-        scatter2 <- FeatureScatter(subset(x,
-                                          subset = nFeature_RNA < 6000),
-                                   feature1 = "nCount_RNA",
-                                   feature2 = "nFeature_RNA") +
-          geom_hline(yintercept = my_filters["nFeature_min"],
-                     linetype = "dotted") +
-          geom_hline(yintercept = my_filters["nFeature_max"],
-                     linetype = "dotted") +
-          annotate("text", x=Inf, y=my_filters["nFeature_min"],
-                   label=paste(my_filters["nFeature_min"]),
-                   vjust = -0.5, hjust = 1) +
-          annotate("text", x=Inf,
-                   y=my_filters["nFeature_max"],
-                   label=paste(my_filters["nFeature_max"]),
-                   vjust = -0.5, hjust = 1) +
-          theme(legend.position = "none")
-      
-      
-        hist <- x@meta.data %>%
-          subset(nFeature_RNA < 6000) %>%
-          mutate(Subset = ifelse(nFeature_RNA > my_filters["nFeature_min"] 
-                                 & nFeature_RNA < my_filters["nFeature_max"],
-                                 'Keep',
-                                 'Remove')) %>%
-          ggplot(aes(nFeature_RNA,
-                     fill = Subset))+
-          geom_histogram(binwidth = 10) +
-          theme_bw() +
-          ggtitle("UMI counts") +
-          scale_fill_manual(values = c('#88e788',
-                                       'black'))
-        
-        
-        if(length(grep(title, list.files(outdir))) > 0) {
-          
-          plotname <- paste0(outdir, "/", title,
-                             "/feature.scatter.",
-                             title, ".png")
-          } else {
-            
-            if(!is.null(outdir)) {
-              message("outdir not specified; saving plots to working directory")
-              }
-            
-            plotname <- paste0(outdir, "/feature.scatter.",
-                           title, ".png")
-            }
-        
-        plots <- arrangeGrob(scatter1, scatter2, hist,
-                             ncol = 2, widths = c(1,1.5),
-                             layout_matrix = rbind(c(1, 3),
-                                                   c(2, 3)),
-                             
-                             top = grid::textGrob(paste(title),
-                                                  gp=grid::gpar(fontsize=24)))
-        
-        ggsave(plotname,
-               plots,
-               units = "in", 
-               width = 10, 
-               height = 6.5, 
-               bg = "white")
-        }
-      )
     }
   }
+   generate.graphs <- \(x) {
+     
+     my_filters <- filters[(rownames(filters) %in% x@project.name),]
+     title <- gsub('.{5}$', '', x@project.name)
+     
+     scatter1 <-  FeatureScatter(x,
+                                 feature1 = "nCount_RNA",
+                                 feature2 = "nFeature_RNA") +
+       theme(legend.position = "none")
+     
+     scatter2 <- FeatureScatter(subset(x,
+                                       subset = nFeature_RNA < 6000),
+                                feature1 = "nCount_RNA",
+                                feature2 = "nFeature_RNA") +
+       geom_hline(yintercept = my_filters["nFeature_min"],
+                  linetype = "dotted") +
+       geom_hline(yintercept = my_filters["nFeature_max"],
+                  linetype = "dotted") +
+       annotate("text", x=Inf, y=my_filters["nFeature_min"],
+                label=paste(my_filters["nFeature_min"]),
+                vjust = -0.5, hjust = 1) +
+       annotate("text", x=Inf,
+                y=my_filters["nFeature_max"],
+                label=paste(my_filters["nFeature_max"]),
+                vjust = -0.5, hjust = 1) +
+       theme(legend.position = "none")
+     
+     
+     hist <- x@meta.data %>%
+       subset(nFeature_RNA < 6000) %>%
+       mutate(Subset = ifelse(nFeature_RNA > my_filters["nFeature_min"] 
+                              & nFeature_RNA < my_filters["nFeature_max"],
+                              'Keep',
+                              'Remove')) %>%
+       ggplot(aes(nFeature_RNA,
+                  fill = Subset))+
+       geom_histogram(binwidth = 10) +
+       theme_bw() +
+       ggtitle("UMI counts") +
+       scale_fill_manual(values = c('#88e788',
+                                    'black'))
+     
+     
+     if(length(grep(title, list.files(outdir))) > 0) {
+       
+       plotname <- paste0(outdir, "/", title, 
+                          "/min.cells.", 
+                          title, ".png")
+       
+     } else if(!is.null(outdir)) {
+       plotname <- paste0(outdir, "/min.cells.",
+                          title, ".png")
+     } else {
+       message("outdir not specified; saving plots to working directory")
+       
+       plotname <- paste0(getwd(), "/min.cells.",
+                          title, ".png")
+     }
+     
+     plots <- arrangeGrob(scatter1, scatter2, hist,
+                          ncol = 2, widths = c(1,1.5),
+                          layout_matrix = rbind(c(1, 3),
+                                                c(2, 3)),
+                          
+                          top = grid::textGrob(paste(title),
+                                               gp=grid::gpar(fontsize=24)))
+     
+     ggsave(plotname,
+            plots,
+            units = "in", 
+            width = 10, 
+            height = 6.5, 
+            bg = "white")
+   }
+  
+   lapply(list_of_SeuratObj, generate.graphs)
+}
 
 check.filters <- function(list_of_SeuratObj, 
                           filters, 
-                          outdir = getwd()) {
-  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
+                          outdir = NULL) {
+  
+  stopifnot("`filters` must be numeric" = is.numeric(filters))
+  
+  if(!is.matrix(filters)) {
+    filters <- as.matrix(filters)
+  }
+  
+  if(!is.list(list_of_SeuratObj)) {
+    list_of_SeuratObj <- list(list_of_SeuratObj)
+  }
   
   if(!require(gridExtra)) {
     message("trying to install gridExtra")
@@ -343,90 +386,101 @@ check.filters <- function(list_of_SeuratObj,
     if(!require(gridExtra)) {
       stop("install gridExtra package before running")
     }
-    
-  } else {
-  
-    lapply(list_of_SeuratObj, \(x) {
-      
-      my_filters <- filters[(rownames(filters) %in% x@project.name),]
-      title <- gsub('.{5}$', '', x@project.name)
-      
-      x1 <- subset(x, subset =
-                     nFeature_RNA >= my_filters["nFeature_min"] &
-                     nFeature_RNA <= my_filters["nFeature_max"] &
-                     percent.mt < my_filters["mito.max"] & 
-                     doublet == 'singlet')
-      
-      xsum <- x1@meta.data %>% 
-        summarize(max = max(nFeature_RNA),
-                  min = min(nFeature_RNA),
-                  median = median(nFeature_RNA),
-                  count = n())
-      show(xsum)
-      
-      scatter <- FeatureScatter(x1, 
-                                feature1 = "nCount_RNA",
-                                feature2 = "nFeature_RNA") +
-        theme(legend.position = "none")
-      
-      hist <- x1@meta.data %>%
-        ggplot(aes(nFeature_RNA))+
-        geom_histogram(binwidth = 10) +
-        theme_bw() +
-        ggtitle("filtered UMI counts")
-      
-      
-      if(length(grep(title, list.files(outdir))) > 0) {
-        
-        plotname <- paste0(outdir, "/", title,
-                           "/filtered.feature.scatter.",
-                           title, ".png")
-      } else {
-        
-        if(!is.null(outdir)) {
-          message("outdir not specified; saving plots to working directory")
-        }
-        
-        plotname <- paste0(outdir, "/filtered.feature.scatter.",
-                           title, ".png")
-      } 
-      
-      plots <- arrangeGrob(scatter, hist,
-                           ncol = 2, widths = c(1,1.5),
-                           
-                           top = grid::textGrob(paste(title), 
-                                                gp=grid::gpar(fontsize=24)))
-      
-      ggsave(plotname,
-             plots,
-             units = "in", 
-             width = 10, 
-             height = 5, 
-             bg = "white")
-      }
-    )
   }
+  
+  generate.graphs <- \(x) {
+    
+    my_filters <- filters[(rownames(filters) %in% x@project.name),]
+    title <- gsub('.{5}$', '', x@project.name)
+    
+    x1 <- subset(x, subset =
+                   nFeature_RNA >= my_filters["nFeature_min"] &
+                   nFeature_RNA <= my_filters["nFeature_max"] &
+                   percent.mt < my_filters["mito.max"] & 
+                   doublet == 'singlet')
+    
+    xsum <- x1@meta.data %>% 
+      summarize(max = max(nFeature_RNA),
+                min = min(nFeature_RNA),
+                median = median(nFeature_RNA),
+                count = n())
+    show(xsum)
+    
+    scatter <- FeatureScatter(x1, 
+                              feature1 = "nCount_RNA",
+                              feature2 = "nFeature_RNA") +
+      theme(legend.position = "none")
+    
+    hist <- x1@meta.data %>%
+      ggplot(aes(nFeature_RNA))+
+      geom_histogram(binwidth = 10) +
+      theme_bw() +
+      ggtitle("filtered UMI counts")
+    
+    
+    if(length(grep(title, list.files(outdir))) > 0) {
+      
+      plotname <- paste0(outdir, "/", title, 
+                         "/min.cells.", 
+                         title, ".png")
+      
+    } else if(!is.null(outdir)) {
+      plotname <- paste0(outdir, "/min.cells.",
+                         title, ".png")
+    } else {
+      message("outdir not specified; saving plots to working directory")
+      
+      plotname <- paste0(getwd(), "/min.cells.",
+                         title, ".png")
+    }
+    
+    plots <- arrangeGrob(scatter, hist,
+                         ncol = 2, widths = c(1,1.5),
+                         
+                         top = grid::textGrob(paste(title), 
+                                              gp=grid::gpar(fontsize=24)))
+    
+    ggsave(plotname,
+           plots,
+           units = "in", 
+           width = 10, 
+           height = 5, 
+           bg = "white")
+  }
+  
+  lapply(list_of_SeuratObj, generate.graphs)
 }
 
 make.filtered.seurat <- function(list_of_SeuratObj, 
                                  filters) {
-  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
   
-  lapply(list_of_SeuratObj, \(x) {
+  stopifnot("`filters` must be numeric" = is.numeric(filters))
+  
+  if(!is.matrix(filters)) {
+    filters <- as.matrix(filters)
+  }
+  
+  if(!is.list(list_of_SeuratObj)) {
+    list_of_SeuratObj <- list(list_of_SeuratObj)
+  }
+  
+  apply.filters <- \(x) {
     
     my_filters <- filters[(rownames(filters) %in% x@project.name),]
     
-    subset(x, subset = 
+    subset(x, subset =
              nFeature_RNA >= my_filters["nFeature_min"] &
              nFeature_RNA <= my_filters["nFeature_max"] &
              percent.mt < my_filters["mito.max"] & 
              doublet == 'singlet')
-    }
-  )
+    
+  }
+  
+  lapply(list_of_SeuratObj, apply.filters)
 }
 
 find.cluster.range <- function(list_of_SeuratObj, 
-                               outdir = getwd(),
+                               outdir = NULL,
                                int_range1 = seq(0,2,0.2),
                                int_range2 = seq(0,1.4,0.2)) {
   
@@ -451,8 +505,8 @@ find.cluster.range <- function(list_of_SeuratObj,
       stop("install gridExtra package before running")
     }
   }
-    
-  lapply(list_of_SeuratObj, \(x) {
+  
+  generate.graphs <- \(x) {
     
     title <- gsub('.{5}$', '', x@project.name)
     
@@ -484,18 +538,19 @@ find.cluster.range <- function(list_of_SeuratObj,
     
     if(length(grep(title, list.files(outdir))) > 0) {
       
-      plotname <- paste0(outdir, "/", title,
-                         "/clustree.resolution.",
+      plotname <- paste0(outdir, "/", title, 
+                         "/min.cells.", 
+                         title, ".png")
+      
+    } else if(!is.null(outdir)) {
+      plotname <- paste0(outdir, "/min.cells.",
                          title, ".png")
     } else {
+      message("outdir not specified; saving plots to working directory")
       
-      if(!is.null(outdir)) {
-        message("outdir not specified; saving plots to working directory")
-      }
-      
-      plotname <- paste0(outdir, "/clustree.resolution.",
+      plotname <- paste0(getwd(), "/min.cells.",
                          title, ".png")
-    } 
+    }
     
     plots <- arrangeGrob(ctx1, ctx2,
                          ncol = 2, widths = c(1,1),
@@ -503,7 +558,7 @@ find.cluster.range <- function(list_of_SeuratObj,
                          top = grid::textGrob(paste(title), 
                                               gp=grid::gpar(fontsize=24)))
     
-    message("**saving plots to outdir**")
+    message("**saving plots**")
     
     ggsave(plotname,
            plots,
@@ -511,15 +566,18 @@ find.cluster.range <- function(list_of_SeuratObj,
            width = 17, 
            height = 6.5, 
            bg = "white")
-    } 
-  )
+  } 
+    
+  lapply(list_of_SeuratObj, generate.graphs)
 }
-
 
 plot.dim.clust <- function(list_of_SeuratObj, 
                            res = 1, 
-                           outdir = getwd()) {
-  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
+                           outdir = NULL) {
+  
+  if(!is.list(list_of_SeuratObj)) {
+    list_of_SeuratObj <- list(list_of_SeuratObj)
+  }
   
   if(!require(gridExtra)) {
     message("trying to install gridExtra")
@@ -528,65 +586,69 @@ plot.dim.clust <- function(list_of_SeuratObj,
     if(!require(gridExtra)) {
       stop("install gridExtra package before running")
     }
-    
-  } else {
-  
-    lapply(list_of_SeuratObj, \(x) {
-      
-      title <- gsub('.{5}$', '', x@project.name)
-      
-      x <- FindClusters(x, resolution = res)
-      
-      ebp <- ElbowPlot(x)
-      vfp <- VariableFeaturePlot_scCustom(x) 
-      dmp <- DimPlot(x, 
-                     reduction = "umap",
-                     label = TRUE,
-                     repel = TRUE)
-      ftp <- FeaturePlot(x, 
-                         reduction = "umap",
-                         features = "nFeature_RNA",
-                         label = TRUE,
-                         repel = TRUE) +
-        labs(color = "nFeature_RNA")
-      
-      plots <- arrangeGrob(ebp,dmp,ftp,vfp,
-                           ncol = 2, nrow = 2,
-                           
-                           top = grid::textGrob(paste(title), 
-                                                gp=grid::gpar(fontsize=24)))
-      
-      if(length(grep(title, list.files(outdir))) > 0) {
-        plotname <- paste0(outdir, "/", title, 
-                           "/elbow.dim.varfeat.", 
-                           title, ".png")
-      } else {
-      
-        if(!is.null(outdir)) {
-          message("outdir not specified; saving plots to working directory")
-        } 
-        
-        plotname <- paste0(outdir, "/elbow.dim.varfeat.",
-                           title, ".png")
-      }
-      
-      ggsave(plotname,
-             plots,
-             units = "in", 
-             width = 12, 
-             height = 10, 
-             bg = "white")
-      }
-    )
   }
+  
+  generate.graphs <- \(x) {
+    
+    title <- gsub('.{5}$', '', x@project.name)
+    
+    x <- FindClusters(x, resolution = res)
+    
+    ebp <- ElbowPlot(x)
+    vfp <- VariableFeaturePlot_scCustom(x) 
+    dmp <- DimPlot(x, 
+                   reduction = "umap",
+                   label = TRUE,
+                   repel = TRUE)
+    ftp <- FeaturePlot(x, 
+                       reduction = "umap",
+                       features = "nFeature_RNA",
+                       label = TRUE,
+                       repel = TRUE) +
+      labs(color = "nFeature_RNA")
+    
+    plots <- arrangeGrob(ebp,dmp,ftp,vfp,
+                         ncol = 2, nrow = 2,
+                         
+                         top = grid::textGrob(paste(title), 
+                                              gp=grid::gpar(fontsize=24)))
+    
+    if(length(grep(title, list.files(outdir))) > 0) {
+      
+      plotname <- paste0(outdir, "/", title, 
+                         "/min.cells.", 
+                         title, ".png")
+      
+    } else if(!is.null(outdir)) {
+      plotname <- paste0(outdir, "/min.cells.",
+                         title, ".png")
+    } else {
+      message("outdir not specified; saving plots to working directory")
+      
+      plotname <- paste0(getwd(), "/min.cells.",
+                         title, ".png")
+    }
+    
+    ggsave(plotname,
+           plots,
+           units = "in", 
+           width = 12, 
+           height = 10, 
+           bg = "white")
+  }
+  
+  lapply(list_of_SeuratObj, generate.graphs)
 }
 
 annotate.with.sctype <- function(list_of_SeuratObj,
                               name = "sctype.ind",
-                              outdir = getwd()) {
-  stopifnot("`list_of_SeuratObj` must be a list" = is.list(list_of_SeuratObj))
+                              outdir = NULL) {
   
-  lapply(list_of_SeuratObj, \(x) {
+  if(!is.list(list_of_SeuratObj)) {
+    list_of_SeuratObj <- list(list_of_SeuratObj)
+  }
+  
+  mod.sctype.wrapper <- \(x) {
     title <- gsub('.{5}$', '', x@project.name)
     
     # from sctype wrapper function
@@ -619,18 +681,19 @@ annotate.with.sctype <- function(list_of_SeuratObj,
       ggtitle(paste(title))
     
     if(length(grep(title, list.files(outdir))) > 0) {
+      
       plotname <- paste0(outdir, "/", title, 
-                         "/sctype.dimplot.", 
+                         "/min.cells.", 
+                         title, ".png")
+      
+    } else if(!is.null(outdir)) {
+      plotname <- paste0(outdir, "/min.cells.",
                          title, ".png")
     } else {
+      message("outdir not specified; saving plots to working directory")
       
-      if(!is.null(outdir)) {
-        message("outdir not specified; saving plots to working directory")
-      }
-      
-      plotname <- paste0(outdir, "/sctype.dimplot.",
+      plotname <- paste0(getwd(), "/min.cells.",
                          title, ".png")
-      
     }
     
     ggsave(plotname,
@@ -640,8 +703,9 @@ annotate.with.sctype <- function(list_of_SeuratObj,
            bg = "white")
     
     return(x)
-    }
-  )
+  }
+  
+  lapply(list_of_SeuratObj, mod.sctype.wrapper)
 }
 
 
