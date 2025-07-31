@@ -15,7 +15,7 @@ source("./functions/QC_filtering_fun.R")
 
 # libraries
 lapply(c("tidyverse","Seurat", "SeuratExtend", "collapse", "clustree",
-         "scCustomize", "HGNChelper","openxlsx"), 
+         "scCustomize", "HGNChelper","openxlsx", "ggalluvial"), 
        library, character.only = T)
 
 
@@ -189,4 +189,49 @@ ggsave(paste0(qc_plots_path,
        height = 10)
 
 #### ScType on Integrated SeuratObj ####
+
+# load gene set preparation function
+  source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/gene_sets_prepare.R")
+# load cell type annotation function
+  source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/sctype_score_.R")
+
+# gene list
+db_ = "https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/ScTypeDB_full.xlsx"
+# set tissue type
+tissue = "Brain" 
+# prepare gene sets
+gs_list = gene_sets_prepare(db_, tissue)
+
+l.dfs <- annotate.with.sctype(int.ldfs, 
+                              "sctype.integrated", 
+                              qc_plots_path) %>% 
+  set_names("int.ldfs")
+
+### compare individual to integrated
+## graph alluvial plot
+l.dfs$int.ldfs@meta.data %>%
+  select(c(sctype.integrated,
+           sctype.ind)) %>%
+  table() %>%
+  as.data.frame() %>%
+  mutate(Count = sum(Freq)) %>%
+  ungroup() %>%
+  mutate(Freq.scale = 100*Freq/Count) %>%
+  ggplot(aes(axis1 = reorder(sctype.integrated, -Freq.scale),
+             axis2 = reorder(sctype.ind,-Freq.scale),
+             y = Freq.scale)) +
+  geom_alluvium(aes(fill = sctype.integrated)) +
+  geom_stratum() +
+  geom_text(stat = "stratum",
+            aes(label = after_stat(stratum))) +
+  scale_x_discrete(limits = c("sctype.integrated",
+                              "sctype.ind"),
+                   expand = c(0.15, 0.05)) +
+  scale_fill_viridis_d() +
+  theme_classic()
+
+ggsave(paste0(qc_plots_path, 
+              "/integrated/alluvial.cells.by.sctype.indVintegrated.png"),
+       width = 15,
+       height = 10)
 
