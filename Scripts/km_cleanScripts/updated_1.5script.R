@@ -235,3 +235,94 @@ ggsave(paste0(qc_plots_path,
        width = 15,
        height = 10)
 
+## graph by individual 
+for (i in unique(l.dfs$int.ldfs$orig.ident)) {
+  l.dfs$int.ldfs@meta.data %>%
+    filter(orig.ident == i) %>% 
+    select(c(sctype.integrated,
+             sctype.ind)) %>%
+    table() %>%
+    as.data.frame() %>%
+    mutate(Count = sum(Freq)) %>%
+    ungroup() %>%
+    mutate(Freq.scale = 100*Freq/Count) %>%
+    ggplot(aes(axis1 = reorder(sctype.integrated, -Freq.scale),
+               axis2 = reorder(sctype.ind, -Freq.scale),
+               y = Freq.scale)) +
+    geom_alluvium(aes(fill = sctype.integrated)) +
+    geom_stratum() +
+    geom_text(stat = "stratum",
+              aes(label = after_stat(stratum))) +
+    scale_x_discrete(limits = c("sctype.all",
+                                "sctype.ind"),
+                     expand = c(0.15, 0.05)) +
+    scale_fill_viridis_d() +
+    theme_classic() +
+    ggtitle(paste(i))
+  
+  
+  ggsave(paste0(qc_plots_path, 
+                "/integrated/alluvial.cells.by.sctype.indVintegrated.",
+               i, ".png"),
+         width = 15,
+         height = 10)
+}
+
+## graph alluvial plot with clusters
+l.dfs$int.ldfs@meta.data %>% 
+  select(c(integrated_snn_res.0.4,
+           sctype.integrated,
+           sctype.ind)) %>%
+  table() %>%
+  as.data.frame() %>%
+  mutate(Count = sum(Freq)) %>%
+  ungroup() %>%
+  mutate(Freq.scale = 100*Freq/Count) %>%
+  ggplot(aes(axis1 = reorder(sctype.integrated, -Freq.scale),
+             axis2 = reorder(integrated_snn_res.0.4, -Freq.scale),
+             axis3 = reorder(sctype.ind,-Freq.scale),
+             y = Freq.scale)) +
+  geom_alluvium(aes(fill = sctype.integrated)) +
+  geom_stratum() +
+  geom_text(stat = "stratum",
+            aes(label = after_stat(stratum))) +
+  scale_x_discrete(limits = c("sctype.all",
+                              "sctype.ind"),
+                   expand = c(0.15, 0.05)) +
+  scale_fill_viridis_d() +
+  theme_classic()
+
+ggsave(paste0(qc_plots_path, 
+              "/integrated/alluvial.cells.by.sctype.indVintegrated.clusters.png"),
+       width = 22,
+       height = 12)
+
+## counts per sample
+l.dfs$int.ldfs@meta.data %>% 
+  select(c(orig.ident,
+           sctype.integrated)) %>%
+  table() %>%
+  as.data.frame() %>% 
+  ggplot(aes(x = reorder(sctype.integrated, -Freq),
+             y = Freq,
+             color = orig.ident)) +
+  geom_point() +
+  theme_classic() +
+  xlab('')+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=0.5, size = 4))
+
+ggsave(paste0(qc_plots_path, 
+              "/integrated/cell.count.per.sample.sctype.integrated.png"),
+       height = 5,
+       width = 5)
+
+#### Integrated ScType vs. HypoMap [stopped here] ####
+# line 1952 in seurat_snseq_mouse_IMC.R
+# save integrated seurat object with sctype annotation
+
+int.ldfs <- l.dfs$int.ldfs
+  save(int.ldfs, file = "./data/integrated_seurat_withScType.rda",
+       compress = "xz")
+  
+# run HypoMap and continue in updated_1.75script.R 
+  # mostly exploratory comparisons between celltype annotation methods
