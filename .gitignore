@@ -7,4 +7,5 @@
 /MaleDom/
 /MaleSub/
 /summary/
-/Scripts/km_cleanScripts/data/
+/Scripts/km_cleanScripts/data/*
+!/Scripts/km_cleanScripts/data/km_rscvi_docker
