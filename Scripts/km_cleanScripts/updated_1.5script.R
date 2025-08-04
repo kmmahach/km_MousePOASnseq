@@ -1,7 +1,8 @@
-# R-4.3.1
+# R-4.3.1, Seurat v.5.3.0
 # Cell counts output from CellRanger v7.0.1, details found in >txt file 
 # Souporcell output from https://github.com/wheaton5/souporcell, 
 # details found in >txt file 
+# ScType wrapper function adapted from https://github.com/IanevskiAleksandr/sc-type 
 
 root.dir <- "/stor/home/kmm7552/km_MousePOASnseq"
 net.dir <- "/stor/work/Hofmann/All_projects/Mouse_poa_snseq"
