@@ -43,12 +43,15 @@ DefaultAssay(int.ldfs) <-  'SCT' # returning 'SCT' as the default assay
   
 #### Map data to HypoMap ####
   
-## Tun bash script ./data/km_rscvi_docker/run_scvi_docker.sh
+## Run bash script ./data/km_rscvi_docker/run_scvi_docker.sh
 ## Requires docker install! If running on lambcomp02 or other rental POD, comes pre-installed
+## Do not try to run docker desktop on Windows if using VPN to access data files - can't bind mount to remote server
+## If running on local machine (not recommended w/o large RAM), check all filepaths or clone this repo
 
   # This pulls the docker image from lsteuernagel/mapscvi and modifies it to pre-load all dependencies
   # (see ./data/km_rscvi_docker/Dockerfile),
-  # then uses a modified map_new_seurat_hypoMap wrapper function to perform appropriate data prep and mapping,
+  # then uses a modified map_new_seurat_hypoMap wrapper function 
+  # (./data/km_rscvi_docker/mapscvi_wrapper.R) to perform appropriate data prep and mapping,
   # and finally saves the new Seurat object: ./data/integrated_seurat_withHypoMap.rda
   
 load('./data/integrated_seurat_withHypoMap.rda')
