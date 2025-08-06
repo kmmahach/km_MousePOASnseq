@@ -9,3 +9,7 @@
 /summary/
 /Scripts/km_cleanScripts/data/*
 !/Scripts/km_cleanScripts/data/km_rscvi_docker
+/HypoMap/data/*
+!/HypoMap/data/42255_2022_657_MOESM3_ESM.xlsx
+!/HypoMap/data/HypoMap_cluster_parent_ids.csv
+!/HypoMap/data/clusterC286_brain_annotation_HypoMap.csv

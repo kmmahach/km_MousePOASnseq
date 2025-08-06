@@ -1,0 +1,26 @@
+parent_id.exp,parent_id,parent_id.broad
+C25-1: GLU-1,C25-1,C7-1: GLU
+C25-2: GLU-2,C25-2,C7-1: GLU
+C25-3: GLU-3,C25-3,C7-1: GLU
+C25-4: GLU-4,C25-4,C7-1: GLU
+C25-5: GLU-5,C25-5,C7-1: GLU
+C25-6: GLU-6,C25-6,C7-1: GLU
+C25-7: GLU-7,C25-7,C7-1: GLU
+C25-8: GLU-8,C25-8,C7-1: GLU
+C25-9: GLU-9,C25-9,C7-1: GLU
+C25-10: GABA-2,C25-10,C7-2: GABA
+C25-11: GABA-1,C25-11,C7-2: GABA
+C25-12: GABA-3,C25-12,C7-2: GABA
+C25-13: GABA-4,C25-13,C7-2: GABA
+C25-14: GABA-5,C25-14,C7-2: GABA
+C25-15: GABA-6,C25-15,C7-2: GABA
+C25-16: GABA-7,C25-16,C7-2: GABA
+C25-17: Ependymal-like,C25-17,C7-3: Astro-Ependymal
+C25-18: Astrocytes,C25-18,C7-3: Astro-Ependymal
+C25-19: Oligodendrocytes,C25-19,C7-4: Oligo+Precursor
+C25-20: OPC,C25-20,C7-4: Oligo+Precursor
+C25-21: Immune,C25-21,C7-5: Immune
+C25-22: Immune-Trbc1,C25-22,C7-5: Immune
+C25-23: ParsTuber,C25-23,C7-6: ParsTuber
+C25-24: Mural+Endothelial,C25-24,C7-7: Vascular
+C25-25: Fibroblasts,C25-25,C7-7: Vascular
