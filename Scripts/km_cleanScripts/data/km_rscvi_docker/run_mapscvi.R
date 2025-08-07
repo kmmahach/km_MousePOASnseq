@@ -25,6 +25,7 @@ int.ldfs$Batch_ID <- paste(int.ldfs$orig.ident)
 
 int.ldfs = UPDATEDmap_new_seurat_hypoMap(int.ldfs,
                                          suffix = "integrated.data",
+                                         label_col = "C66_named",
                                          max_epochs = 20,
                                          assay = "SCT")
 print(int.ldfs)

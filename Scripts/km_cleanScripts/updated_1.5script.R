@@ -1,12 +1,14 @@
-# R-4.3.1, Seurat v.5.3.0
-# Cell counts output from CellRanger v7.0.1, details found in >txt file 
-# Souporcell output from https://github.com/wheaton5/souporcell, 
-# details found in >txt file 
+# R-4.3.1
+# Seurat-4.4.0
+# Cell counts output from CellRanger-7.0.1, details found in Scripts/cellranger_poa_IMC.txt
+# Souporcell output from https://github.com/wheaton5/souporcell, details found in Scripts/souporcell_poa_IMC.txt 
 # ScType wrapper function adapted from https://github.com/IanevskiAleksandr/sc-type 
 
+# net.dir <- "/stor/work/Hofmann/All_projects/Mouse_poa_snseq" 
 root.dir <- "/stor/home/kmm7552/km_MousePOASnseq"
-net.dir <- "/stor/work/Hofmann/All_projects/Mouse_poa_snseq"
 setwd(paste0(root.dir, "/Scripts/km_cleanScripts"))
+set.seed(12345)
+compression = "xz" # slower, but usually smallest compression
 
 # path to save plots
 qc_plots_path <- paste0(root.dir, "/QC_filtering")
@@ -14,11 +16,10 @@ qc_plots_path <- paste0(root.dir, "/QC_filtering")
 # load functions
 source("./functions/QC_filtering_fun.R")
 
-# libraries
-lapply(c("tidyverse","Seurat", "SeuratExtend", "collapse", "clustree",
-         "scCustomize", "HGNChelper","openxlsx", "ggalluvial"), 
-       library, character.only = T)
-
+# libraries (save dependencies and package versions)
+load_packages(c("tidyverse", "Seurat", "SeuratExtend", "collapse", "clustree",
+                "scCustomize", "HGNChelper","openxlsx", "ggalluvial"),
+              out_prefix = "1.5")
 
 #### Seurat Object Integration ####
 load("./data/filtered_counts_withScType.rda")
@@ -45,8 +46,8 @@ int.ldfs <- IntegrateData(anchorset = anchors,
 
 int.ldfs@project.name = "integrated.data"
 
-  # save(int.ldfs, file = "./data/integrated_seurat.rda",
-  #      compress = "xz") # definitely too big to store for free!
+  save(int.ldfs, file = "./data/integrated_seurat.rda",
+       compress = "xz") # definitely too big to store for free!
 
 # dimensionality reduction
 int.ldfs %>%
@@ -81,12 +82,16 @@ ggsave(paste0(qc_plots_path,
 res.1 = seq(0,1,0.2)
 res.2 = seq(0,0.8,0.2) # reduced range
 
-  find.cluster.range(int.ldfs,
+ find.cluster.range2(int.ldfs,
                      qc_plots_path,
                      int_range1 = res.1,
                      int_range2 = res.2)
 # best res = 0.4 
-int.ldfs <- FindClusters(int.ldfs, resolution = 0.4)
+ l.dfs <- lapply(l.dfs, \(x) {
+   x = FindClusters(x, resolution = 0.4)
+   return(x)
+ }
+)
 
 # check cells per group per cluster
 table(int.ldfs@active.ident, 
@@ -322,6 +327,7 @@ ggsave(paste0(qc_plots_path,
 # save integrated seurat object with sctype annotation
 
 int.ldfs <- l.dfs$int.ldfs
+
   save(int.ldfs, file = "./data/integrated_seurat_withScType.rda",
        compress = "xz")
   
