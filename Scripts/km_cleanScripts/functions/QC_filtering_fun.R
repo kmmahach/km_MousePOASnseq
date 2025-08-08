@@ -85,11 +85,23 @@ as_named_list <- function(...) {
   dots <- rlang::enquos(...)
   
   # name and evaluate
-  named_list <- purrr::imap(dots, ~ rlang::eval_tidy(.x) |> 
-                              `names<-`(rlang::as_name(.x)))
-  # flatten
-  setNames(purrr::map(dots, rlang::eval_tidy), purrr::map_chr(dots, rlang::as_name))
+  values <- purrr::map(dots, rlang::eval_tidy)
+  
+  # names from quosures or fallback to default "unnamed"
+  names <- purrr::map_chr(dots, function(dot) {
+    if (rlang::quo_is_symbol(dot) || rlang::quo_is_call(dot)) {
+      rlang::as_name(dot)
+    } else {
+      "unnamed"
+    }
+  })
+  
+  if (!is.null(named <- names(dots))) {
+    names <- ifelse(named == "" | is.na(named), names, named)
+  }
+  setNames(values, names)
 }
+
 
 #### Seurat QC and plotting functions ####
 # note: will work with Seurat v5 and Seurat v4;
@@ -764,6 +776,7 @@ find.cluster.range <- function(list_of_SeuratObj,
     ctx1
     
     x.clust.reduced <- Seurat::FindClusters(object = x,
+                                            # graph.name = paste0(DefaultAssay(x), "_snn"),
                                             resolution = int_range2)
 
     ctx2 <- clustree(x.clust.reduced,
@@ -911,7 +924,9 @@ plot.dim.clust <- function(list_of_SeuratObj,
 # use ScType annotation to assign cell types (save to 'name' in metadata)
 annotate.with.sctype <- function(list_of_SeuratObj,
                                  name = "sctype.ind",
-                                 outdir = NULL) {
+                                 outdir = NULL,
+                                 assay = "SCT",
+                                 scaled = TRUE) {
   
   if (is.list(list_of_SeuratObj) && !is.null(names(list_of_SeuratObj))) {
     list_of_SeuratObj <- list_of_SeuratObj
@@ -926,11 +941,31 @@ annotate.with.sctype <- function(list_of_SeuratObj,
     # source(https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/sctype_wrapper.R)
     message(paste0("using ScType wrapper to annotate brain cell types for ", x@project.name))
     
-    es.max <-  sctype_score(scRNAseqData = x[["SCT"]]$scale.data,
-                            scaled = TRUE, 
-                            gs = gs_list$gs_positive, 
-                            gs2 = gs_list$gs_negative)
+    data_type <- if (scaled) "scale.data" else "counts"  
+    package_type <- data_type %in% names(attributes(x[[assay]]))
     
+    # Calculate scType scores
+    if(package_type){
+      
+      print("Using Seurat v4 object")
+      es.max = sctype_score(scRNAseqData = slot(x[[assay]], data_type),
+                            scaled = TRUE,gs = gs_list$gs_positive, 
+                            gs2 = gs_list$gs_negative)   
+      
+    } else{
+      
+      print("Using Seurat v5 object")
+      
+      if (data_type == "scale.data") {
+        scRNAseqData <- x[[assay]]$scale.data
+      } else {
+        scRNAseqData <- x[[assay]]$counts
+      }
+      
+      es.max = sctype_score(scRNAseqData = as.matrix(scRNAseqData),
+                            scaled = TRUE,gs = gs_list$gs_positive, 
+                            gs2 = gs_list$gs_negative)       
+    }
     # Extract top cell types for each cluster
     cL_resutls = do.call("rbind", lapply(unique(x@meta.data$seurat_clusters), function(cl){
       es.max.cl = sort(rowSums(es.max[ ,rownames(x@meta.data[x@meta.data$seurat_clusters==cl, ])]), decreasing = !0)
@@ -961,6 +996,7 @@ annotate.with.sctype <- function(list_of_SeuratObj,
       
       plotname <- paste0(outdir, "/sctype.dimplot.",
                          title, ".png")
+    }
     
     ggsave(plotname,
            units = "in", 
@@ -969,7 +1005,6 @@ annotate.with.sctype <- function(list_of_SeuratObj,
            bg = "white")
     
     return(x)
-    }
   }
   
   lapply(list_of_SeuratObj, mod.sctype.wrapper)

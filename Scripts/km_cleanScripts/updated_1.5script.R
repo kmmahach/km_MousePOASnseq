@@ -82,16 +82,12 @@ ggsave(paste0(qc_plots_path,
 res.1 = seq(0,1,0.2)
 res.2 = seq(0,0.8,0.2) # reduced range
 
- find.cluster.range2(int.ldfs,
-                     qc_plots_path,
-                     int_range1 = res.1,
-                     int_range2 = res.2)
+ find.cluster.range(int.ldfs,
+                    qc_plots_path,
+                    int_range1 = res.1,
+                    int_range2 = res.2)
 # best res = 0.4 
- l.dfs <- lapply(l.dfs, \(x) {
-   x = FindClusters(x, resolution = 0.4)
-   return(x)
- }
-)
+int.ldfs <- FindClusters(int.ldfs, resolution = 0.4)
 
 # check cells per group per cluster
 table(int.ldfs@active.ident, 

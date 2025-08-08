@@ -24,7 +24,8 @@ packageVersion("SeuratObject")
 source("./functions/QC_filtering_fun.R")
 
 # libraries (save dependencies and package versions)
-load_packages(c("tidyverse", "patchwork", "SeuratExtend", "scCustomize", "collapse", "clustree", "ggrepel"),
+load_packages(c("tidyverse", "patchwork", "SeuratExtend", "scCustomize", 
+                "collapse", "clustree", "ggrepel", "HGNChelper","openxlsx"),
               out_prefix = "01")
 
 
@@ -115,8 +116,8 @@ lapply(l.dfs, \(x) {
 
 ## Graph QC metrics
 # violin plots 
-plot.qc.metrics(l.dfs, qc_plots_path)
-plot.doublets.qc(l.dfs, qc_plots_path)
+  plot.qc.metrics(l.dfs, qc_plots_path)
+  plot.doublets.qc(l.dfs, qc_plots_path)
 
 # choose filter cutoffs 
 filter.categories <- c("nFeature_min", "nFeature_max", "mito.max")
@@ -166,9 +167,6 @@ l.dfs <- lapply(l.dfs, \(x) {
        compress = compression) # still too big for github
 
 ## cell type annotation with ScType
-# libraries 
-lapply(c("dplyr","Seurat","HGNChelper","openxlsx"),
-       library, character.only = T)
 
 # load gene set preparation function
   source("https://raw.githubusercontent.com/IanevskiAleksandr/sc-type/master/R/gene_sets_prepare.R")
