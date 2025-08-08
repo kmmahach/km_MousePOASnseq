@@ -11,7 +11,7 @@ compression = "xz" # slower, but usually smallest compression
 source("./functions/QC_filtering_fun.R")
 
 # libraries (save dependencies and package versions)
-load_packages(c("tidyverse","Seurat", "ggalluvial", "mapscvi", "SeuratDisk"),
+load_packages(c("tidyverse", "Seurat", "ggalluvial", "mapscvi", "SeuratDisk"),
               out_prefix = "02")
 
 

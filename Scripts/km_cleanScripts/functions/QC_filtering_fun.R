@@ -11,7 +11,7 @@ load_packages <- function(pkgs,
   # install missing from CRAN/Bioconductor
   install_missing <- function(pkg) {
     if (!requireNamespace(pkg, quietly = TRUE)) {
-      message("🔍 Installing missing package: ", pkg)
+      message("Installing missing package: ", pkg)
       tryCatch({
         install.packages(pkg)
         if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -21,7 +21,7 @@ load_packages <- function(pkgs,
           BiocManager::install(pkg, ask = FALSE, update = FALSE)
         }
       }, error = function(e) {
-        message("✖ Could not install ", pkg, ": ", e$message)
+        message("Could not install ", pkg, ": ", e$message)
       })
     }
   }
@@ -42,15 +42,15 @@ load_packages <- function(pkgs,
   ), con)
   
   for (pkg in pkgs) {
-    cat("\n📦 ", pkg, "\n")          # console
-    writeLines(paste0("\n📦 ", pkg), con)  # file
+    cat("\n ", pkg, "\n")          # console
+    writeLines(paste0("\n ", pkg), con)  # file
     
     tryCatch({
       suppressPackageStartupMessages(library(pkg, character.only = TRUE))
-      cat("✔ Loaded successfully\n")        # console
+      cat("Loaded successfully\n")        # console
       writeLines("✔ Loaded successfully", con) # file
     }, error = function(e) {
-      cat("✖ Failed to load: ", e$message, "\n")   # console
+      cat("Failed to load: ", e$message, "\n")   # console
       writeLines(paste0("✖ Failed to load: ", e$message), con) # file
     })
   }
@@ -71,7 +71,7 @@ load_packages <- function(pkgs,
   unique_deps <- sort(unique(unlist(deps)))
   writeLines(capture.output(print(unique_deps)), con)
   
-  message("✅ Combined package log saved to: ", report_file)
+  message("Combined package log saved to: ", report_file)
 }
 
 # get names of list elements for plotting
