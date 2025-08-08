@@ -1,0 +1,298 @@
+=== PACKAGE LOG REPORT ===
+Generated on: 2025-08-07 17:08:45.524094
+Packages: tidyverse, Seurat, SeuratExtend, collapse, clustree, scCustomize, HGNChelper, openxlsx, ggalluvial
+
+---- Package Load Status ----
+
+📦 tidyverse
+✔ Loaded successfully
+
+📦 Seurat
+✔ Loaded successfully
+
+📦 SeuratExtend
+✔ Loaded successfully
+
+📦 collapse
+✔ Loaded successfully
+
+📦 clustree
+✔ Loaded successfully
+
+📦 scCustomize
+✔ Loaded successfully
+
+📦 HGNChelper
+✔ Loaded successfully
+
+📦 openxlsx
+✔ Loaded successfully
+
+📦 ggalluvial
+✔ Loaded successfully
+
+---- Package Versions ----
+   tidyverse       Seurat SeuratExtend     collapse     clustree  scCustomize 
+     "2.0.0"      "4.4.0"      "1.2.3"      "2.1.2"      "0.5.1"      "2.0.1" 
+  HGNChelper     openxlsx   ggalluvial 
+    "0.8.15"      "4.2.8"     "0.12.5" 
+
+---- Package Dependencies (Recursive) ----
+$tidyverse
+  [1] "broom"         "conflicted"    "cli"           "dbplyr"       
+  [5] "dplyr"         "dtplyr"        "forcats"       "ggplot2"      
+  [9] "googledrive"   "googlesheets4" "haven"         "hms"          
+ [13] "httr"          "jsonlite"      "lubridate"     "magrittr"     
+ [17] "modelr"        "pillar"        "purrr"         "ragg"         
+ [21] "readr"         "readxl"        "reprex"        "rlang"        
+ [25] "rstudioapi"    "rvest"         "stringr"       "tibble"       
+ [29] "tidyr"         "xml2"          "backports"     "generics"     
+ [33] "glue"          "lifecycle"     "utils"         "memoise"      
+ [37] "blob"          "DBI"           "methods"       "R6"           
+ [41] "tidyselect"    "vctrs"         "withr"         "data.table"   
+ [45] "grDevices"     "grid"          "gtable"        "isoband"      
+ [49] "MASS"          "mgcv"          "scales"        "stats"        
+ [53] "gargle"        "uuid"          "cellranger"    "curl"         
+ [57] "ids"           "rematch2"      "cpp11"         "pkgconfig"    
+ [61] "mime"          "openssl"       "timechange"    "utf8"         
+ [65] "systemfonts"   "textshaping"   "clipr"         "crayon"       
+ [69] "vroom"         "tzdb"          "progress"      "callr"        
+ [73] "fs"            "knitr"         "rmarkdown"     "selectr"      
+ [77] "stringi"       "processx"      "rematch"       "rappdirs"     
+ [81] "evaluate"      "highr"         "tools"         "xfun"         
+ [85] "yaml"          "cachem"        "nlme"          "graphics"     
+ [89] "Matrix"        "splines"       "askpass"       "prettyunits"  
+ [93] "bslib"         "fontawesome"   "htmltools"     "jquerylib"    
+ [97] "tinytex"       "farver"        "labeling"      "RColorBrewer" 
+[101] "viridisLite"   "base64enc"     "bit64"         "sys"          
+[105] "bit"           "fastmap"       "sass"          "digest"       
+[109] "lattice"       "ps"           
+
+$Seurat
+  [1] "methods"          "SeuratObject"     "cluster"         
+  [4] "cowplot"          "fastDummies"      "fitdistrplus"    
+  [7] "future"           "future.apply"     "generics"        
+ [10] "ggplot2"          "ggrepel"          "ggridges"        
+ [13] "graphics"         "grDevices"        "grid"            
+ [16] "httr"             "ica"              "igraph"          
+ [19] "irlba"            "jsonlite"         "KernSmooth"      
+ [22] "leidenbase"       "lifecycle"        "lmtest"          
+ [25] "MASS"             "Matrix"           "matrixStats"     
+ [28] "miniUI"           "patchwork"        "pbapply"         
+ [31] "plotly"           "png"              "progressr"       
+ [34] "RANN"             "RColorBrewer"     "Rcpp"            
+ [37] "RcppAnnoy"        "RcppHNSW"         "reticulate"      
+ [40] "rlang"            "ROCR"             "RSpectra"        
+ [43] "Rtsne"            "scales"           "scattermore"     
+ [46] "sctransform"      "shiny"            "spatstat.explore"
+ [49] "spatstat.geom"    "stats"            "tibble"          
+ [52] "tools"            "utils"            "uwot"            
+ [55] "RcppEigen"        "RcppProgress"     "gtable"          
+ [58] "data.table"       "stringr"          "survival"        
+ [61] "digest"           "globals"          "listenv"         
+ [64] "parallel"         "parallelly"       "cli"             
+ [67] "glue"             "isoband"          "mgcv"            
+ [70] "vctrs"            "withr"            "curl"            
+ [73] "mime"             "openssl"          "R6"              
+ [76] "magrittr"         "pkgconfig"        "cpp11"           
+ [79] "zoo"              "htmltools"        "farver"          
+ [82] "viridisLite"      "base64enc"        "htmlwidgets"     
+ [85] "tidyr"            "dplyr"            "lazyeval"        
+ [88] "crosstalk"        "purrr"            "promises"        
+ [91] "RcppTOML"         "here"             "rappdirs"        
+ [94] "gplots"           "labeling"         "reshape2"        
+ [97] "gridExtra"        "RcppArmadillo"    "sp"              
+[100] "spam"             "httpuv"           "xtable"          
+[103] "fontawesome"      "sourcetools"      "later"           
+[106] "fastmap"          "commonmark"       "bslib"           
+[109] "cachem"           "spatstat.data"    "spatstat.univar" 
+[112] "spatstat.random"  "nlme"             "spatstat.utils"  
+[115] "spatstat.sparse"  "goftest"          "abind"           
+[118] "deldir"           "polyclip"         "pillar"          
+[121] "FNN"              "dqrng"            "jquerylib"       
+[124] "memoise"          "sass"             "tidyselect"      
+[127] "BH"               "sitmo"            "codetools"       
+[130] "gtools"           "caTools"          "rprojroot"       
+[133] "knitr"            "rmarkdown"        "yaml"            
+[136] "splines"          "lattice"          "askpass"         
+[139] "utf8"             "plyr"             "dotCall64"       
+[142] "tensor"           "stringi"          "sys"             
+[145] "bitops"           "evaluate"         "highr"           
+[148] "xfun"             "tinytex"          "fs"              
+
+$SeuratExtend
+character(0)
+
+$collapse
+[1] "Rcpp"    "methods" "utils"  
+
+$clustree
+ [1] "ggraph"        "checkmate"     "igraph"        "dplyr"        
+ [5] "grid"          "ggplot2"       "viridis"       "methods"      
+ [9] "rlang"         "tidygraph"     "ggrepel"       "backports"    
+[13] "utils"         "cli"           "generics"      "glue"         
+[17] "lifecycle"     "magrittr"      "pillar"        "R6"           
+[21] "tibble"        "tidyselect"    "vctrs"         "grDevices"    
+[25] "gtable"        "isoband"       "MASS"          "mgcv"         
+[29] "scales"        "stats"         "withr"         "ggforce"      
+[33] "graphlayouts"  "memoise"       "cpp11"         "Rcpp"         
+[37] "graphics"      "Matrix"        "pkgconfig"     "tidyr"        
+[41] "tools"         "viridisLite"   "gridExtra"     "tweenr"       
+[45] "polyclip"      "systemfonts"   "RcppArmadillo" "cachem"       
+[49] "nlme"          "splines"       "utf8"          "farver"       
+[53] "labeling"      "RColorBrewer"  "purrr"         "stringr"      
+[57] "fastmap"       "lattice"       "stringi"       "base64enc"    
+[61] "jsonlite"     
+
+$scCustomize
+  [1] "Seurat"           "circlize"         "cli"             
+  [4] "cowplot"          "data.table"       "dplyr"           
+  [7] "forcats"          "ggbeeswarm"       "ggplot2"         
+ [10] "ggprism"          "ggrastr"          "ggrepel"         
+ [13] "glue"             "grDevices"        "grid"            
+ [16] "janitor"          "lifecycle"        "magrittr"        
+ [19] "Matrix"           "methods"          "paletteer"       
+ [22] "patchwork"        "pbapply"          "purrr"           
+ [25] "rlang"            "scales"           "scattermore"     
+ [28] "SeuratObject"     "stats"            "stringi"         
+ [31] "stringr"          "tibble"           "tidyr"           
+ [34] "graphics"         "GlobalOptions"    "shape"           
+ [37] "utils"            "colorspace"       "gtable"          
+ [40] "generics"         "pillar"           "R6"              
+ [43] "tidyselect"       "vctrs"            "beeswarm"        
+ [46] "vipor"            "isoband"          "MASS"            
+ [49] "mgcv"             "withr"            "digest"          
+ [52] "Cairo"            "png"              "ragg"            
+ [55] "Rcpp"             "hms"              "lubridate"       
+ [58] "snakecase"        "prismatic"        "rematch2"        
+ [61] "rstudioapi"       "farver"           "parallel"        
+ [64] "labeling"         "RColorBrewer"     "viridisLite"     
+ [67] "cluster"          "fastDummies"      "fitdistrplus"    
+ [70] "future"           "future.apply"     "ggridges"        
+ [73] "httr"             "ica"              "igraph"          
+ [76] "irlba"            "jsonlite"         "KernSmooth"      
+ [79] "leidenbase"       "lmtest"           "matrixStats"     
+ [82] "miniUI"           "plotly"           "progressr"       
+ [85] "RANN"             "RcppAnnoy"        "RcppHNSW"        
+ [88] "reticulate"       "ROCR"             "RSpectra"        
+ [91] "Rtsne"            "sctransform"      "shiny"           
+ [94] "spatstat.explore" "spatstat.geom"    "tools"           
+ [97] "uwot"             "RcppEigen"        "RcppProgress"    
+[100] "sp"               "spam"             "pkgconfig"       
+[103] "cpp11"            "survival"         "globals"         
+[106] "listenv"          "parallelly"       "curl"            
+[109] "mime"             "openssl"          "zoo"             
+[112] "timechange"       "nlme"             "splines"         
+[115] "htmltools"        "utf8"             "base64enc"       
+[118] "htmlwidgets"      "lazyeval"         "crosstalk"       
+[121] "promises"         "systemfonts"      "textshaping"     
+[124] "RcppTOML"         "here"             "rappdirs"        
+[127] "gplots"           "reshape2"         "gridExtra"       
+[130] "RcppArmadillo"    "httpuv"           "xtable"          
+[133] "fontawesome"      "sourcetools"      "later"           
+[136] "fastmap"          "commonmark"       "bslib"           
+[139] "cachem"           "lattice"          "dotCall64"       
+[142] "spatstat.data"    "spatstat.univar"  "spatstat.random" 
+[145] "spatstat.utils"   "spatstat.sparse"  "goftest"         
+[148] "abind"            "deldir"           "polyclip"        
+[151] "FNN"              "dqrng"            "jquerylib"       
+[154] "memoise"          "sass"             "BH"              
+[157] "sitmo"            "codetools"        "gtools"          
+[160] "caTools"          "rprojroot"        "knitr"           
+[163] "rmarkdown"        "yaml"             "askpass"         
+[166] "plyr"             "tensor"           "sys"             
+[169] "bitops"           "evaluate"         "highr"           
+[172] "xfun"             "tinytex"          "fs"              
+
+$HGNChelper
+[1] "methods"         "utils"           "splitstackshape" "data.table"     
+
+$openxlsx
+[1] "grDevices" "methods"   "Rcpp"      "stats"     "stringi"   "utils"    
+[7] "zip"       "tools"    
+
+$ggalluvial
+ [1] "ggplot2"      "stats"        "dplyr"        "tidyr"        "lazyeval"    
+ [6] "rlang"        "tidyselect"   "cli"          "generics"     "glue"        
+[11] "lifecycle"    "magrittr"     "methods"      "pillar"       "R6"          
+[16] "tibble"       "utils"        "vctrs"        "grDevices"    "grid"        
+[21] "gtable"       "isoband"      "MASS"         "mgcv"         "scales"      
+[26] "withr"        "purrr"        "stringr"      "cpp11"        "nlme"        
+[31] "graphics"     "Matrix"       "splines"      "utf8"         "farver"      
+[36] "labeling"     "RColorBrewer" "viridisLite"  "stringi"      "pkgconfig"   
+[41] "lattice"      "tools"       
+
+
+---- Unique Dependencies ----
+  [1] "abind"            "askpass"          "backports"       
+  [4] "base64enc"        "beeswarm"         "BH"              
+  [7] "bit"              "bit64"            "bitops"          
+ [10] "blob"             "broom"            "bslib"           
+ [13] "cachem"           "Cairo"            "callr"           
+ [16] "caTools"          "cellranger"       "checkmate"       
+ [19] "circlize"         "cli"              "clipr"           
+ [22] "cluster"          "codetools"        "colorspace"      
+ [25] "commonmark"       "conflicted"       "cowplot"         
+ [28] "cpp11"            "crayon"           "crosstalk"       
+ [31] "curl"             "data.table"       "DBI"             
+ [34] "dbplyr"           "deldir"           "digest"          
+ [37] "dotCall64"        "dplyr"            "dqrng"           
+ [40] "dtplyr"           "evaluate"         "farver"          
+ [43] "fastDummies"      "fastmap"          "fitdistrplus"    
+ [46] "FNN"              "fontawesome"      "forcats"         
+ [49] "fs"               "future"           "future.apply"    
+ [52] "gargle"           "generics"         "ggbeeswarm"      
+ [55] "ggforce"          "ggplot2"          "ggprism"         
+ [58] "ggraph"           "ggrastr"          "ggrepel"         
+ [61] "ggridges"         "GlobalOptions"    "globals"         
+ [64] "glue"             "goftest"          "googledrive"     
+ [67] "googlesheets4"    "gplots"           "graphics"        
+ [70] "graphlayouts"     "grDevices"        "grid"            
+ [73] "gridExtra"        "gtable"           "gtools"          
+ [76] "haven"            "here"             "highr"           
+ [79] "hms"              "htmltools"        "htmlwidgets"     
+ [82] "httpuv"           "httr"             "ica"             
+ [85] "ids"              "igraph"           "irlba"           
+ [88] "isoband"          "janitor"          "jquerylib"       
+ [91] "jsonlite"         "KernSmooth"       "knitr"           
+ [94] "labeling"         "later"            "lattice"         
+ [97] "lazyeval"         "leidenbase"       "lifecycle"       
+[100] "listenv"          "lmtest"           "lubridate"       
+[103] "magrittr"         "MASS"             "Matrix"          
+[106] "matrixStats"      "memoise"          "methods"         
+[109] "mgcv"             "mime"             "miniUI"          
+[112] "modelr"           "nlme"             "openssl"         
+[115] "paletteer"        "parallel"         "parallelly"      
+[118] "patchwork"        "pbapply"          "pillar"          
+[121] "pkgconfig"        "plotly"           "plyr"            
+[124] "png"              "polyclip"         "prettyunits"     
+[127] "prismatic"        "processx"         "progress"        
+[130] "progressr"        "promises"         "ps"              
+[133] "purrr"            "R6"               "ragg"            
+[136] "RANN"             "rappdirs"         "RColorBrewer"    
+[139] "Rcpp"             "RcppAnnoy"        "RcppArmadillo"   
+[142] "RcppEigen"        "RcppHNSW"         "RcppProgress"    
+[145] "RcppTOML"         "readr"            "readxl"          
+[148] "rematch"          "rematch2"         "reprex"          
+[151] "reshape2"         "reticulate"       "rlang"           
+[154] "rmarkdown"        "ROCR"             "rprojroot"       
+[157] "RSpectra"         "rstudioapi"       "Rtsne"           
+[160] "rvest"            "sass"             "scales"          
+[163] "scattermore"      "sctransform"      "selectr"         
+[166] "Seurat"           "SeuratObject"     "shape"           
+[169] "shiny"            "sitmo"            "snakecase"       
+[172] "sourcetools"      "sp"               "spam"            
+[175] "spatstat.data"    "spatstat.explore" "spatstat.geom"   
+[178] "spatstat.random"  "spatstat.sparse"  "spatstat.univar" 
+[181] "spatstat.utils"   "splines"          "splitstackshape" 
+[184] "stats"            "stringi"          "stringr"         
+[187] "survival"         "sys"              "systemfonts"     
+[190] "tensor"           "textshaping"      "tibble"          
+[193] "tidygraph"        "tidyr"            "tidyselect"      
+[196] "timechange"       "tinytex"          "tools"           
+[199] "tweenr"           "tzdb"             "utf8"            
+[202] "utils"            "uuid"             "uwot"            
+[205] "vctrs"            "vipor"            "viridis"         
+[208] "viridisLite"      "vroom"            "withr"           
+[211] "xfun"             "xml2"             "xtable"          
+[214] "yaml"             "zip"              "zoo"             
