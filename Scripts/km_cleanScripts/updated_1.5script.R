@@ -47,7 +47,7 @@ int.ldfs <- IntegrateData(anchorset = anchors,
 int.ldfs@project.name = "integrated.data"
 
   save(int.ldfs, file = "./data/integrated_seurat.rda",
-       compress = "xz") # definitely too big to store for free!
+       compress = compression) # definitely too big to store for free!
 
 # dimensionality reduction
 int.ldfs %>%
@@ -55,7 +55,8 @@ int.ldfs %>%
   RunUMAP(reduction = "pca", 
           dims = 1:30) %>% 
   PrepSCTFindMarkers(assay = "SCT") %>% 
-  FindNeighbors(reduction = "pca", dims = 1:30) -> int.ldfs
+  FindNeighbors(reduction = "pca", 
+                dims = 1:30) -> int.ldfs
 
 #### Check Results of Integration ####
 # check umap
@@ -65,8 +66,7 @@ DimPlot(int.ldfs,
 
 ggsave(paste0(qc_plots_path, 
               "/integrated/dimplot.ident.integrated.png"),
-       height = 10,
-       width = 10)
+       height = 10, width = 10)
 
 DimPlot(int.ldfs,
         reduction = "umap",
@@ -113,12 +113,10 @@ cells.per.cluster.table %>%
   geom_point() +
   theme_bw()
 
-ggsave(paste0(qc_plots_path, 
-              "/integrated/cells.per.cluster.integrated.png"),
-       width = 5,
-       height = 4)
+ggsave(paste0(qc_plots_path, "/integrated/cells.per.cluster.integrated.png"),
+       width = 5, height = 4)
 
-# make figures - presentation
+# make figures - set colors
 presentation.color <- c('#66c2a5',
                         '#fc8d62',
                         '#8da0cb',
@@ -130,15 +128,12 @@ presentation.color <- c('#66c2a5',
 # empty cluster
 DimPlot(int.ldfs,
         reduction = "umap",
-        cols = c(rep('grey',
-                     43)),
+        cols = c(rep('grey', 43)),
         pt.size = 1) +
   theme(legend.position = 'none')
 
-ggsave(paste0(qc_plots_path, 
-              "/integrated/empty.dimplot.comparison.all.png"),
-       width = 10,
-       height = 10)
+ggsave(paste0(qc_plots_path, "/integrated/empty.dimplot.comparison.all.png"),
+       width = 10, height = 10)
 
 # presentation simple cluster
 DimPlot(int.ldfs,
@@ -149,46 +144,38 @@ DimPlot(int.ldfs,
         repel = T) +
   theme(legend.position = 'none')
 
-ggsave(paste0(qc_plots_path, 
-              "/integrated/clusters.dimplot.comparison.all.png"),
-       width = 10,
-       height = 10)
+ggsave(paste0(qc_plots_path, "/integrated/clusters.dimplot.comparison.all.png"),
+       width = 10, height = 10)
 
-# presentation across samples cluster
+# across samples cluster
 DimPlot(int.ldfs,
         reduction = "umap",
         split.by = 'orig.ident',
         pt.size = 1) +
   theme(legend.position = 'none')
 
-ggsave(paste0(qc_plots_path, 
-              "/integrated/domVsub.clusters.dimplot.comparison.all.png"),
-       width = 20,
-       height = 10)
+ggsave(paste0(qc_plots_path, "/integrated/domVsub.clusters.dimplot.comparison.all.png"),
+       width = 20, height = 5)
 
-# presentation across samples genotype
+# across samples genotype
 DimPlot(int.ldfs,
         reduction = "umap",
         split.by = 'orig.ident',
         group.by = 'indiv_genotype',
         pt.size = 1) 
 
-ggsave(paste0(qc_plots_path, 
-              "/integrated/domVsub.genotype.dimplot.comparison.all.png"),
-       width = 20,
-       height = 10)
+ggsave(paste0(qc_plots_path, "/integrated/domVsub.genotype.dimplot.comparison.all.png"),
+       width = 20, height = 5)
 
-# presentation across samples nfeature
+# across samples nfeature
 FeaturePlot(int.ldfs,
             reduction = "umap",
             split.by = 'orig.ident',
             features = 'nFeature_SCT',
             pt.size = 1)
 
-ggsave(paste0(qc_plots_path, 
-              "/integrated/domVsub.nfeature.dimplot.comparison.all.png"),
-       width = 20,
-       height = 10)
+ggsave(paste0(qc_plots_path, "/integrated/domVsub.nfeature.dimplot.comparison.all.png"),
+       width = 20, height = 5)
 
 #### ScType on Integrated SeuratObj ####
 
@@ -206,8 +193,7 @@ gs_list = gene_sets_prepare(db_, tissue)
 
 l.dfs <- annotate.with.sctype(int.ldfs, 
                               "sctype.integrated", 
-                              qc_plots_path) %>% 
-  set_names("int.ldfs")
+                              qc_plots_path) %>% set_names("int.ldfs")
 
 ### compare individual to integrated
 ## graph alluvial plot
@@ -232,10 +218,8 @@ l.dfs$int.ldfs@meta.data %>%
   scale_fill_viridis_d() +
   theme_classic()
 
-ggsave(paste0(qc_plots_path, 
-              "/integrated/alluvial.cells.by.sctype.indVintegrated.png"),
-       width = 15,
-       height = 10)
+ggsave(paste0(qc_plots_path, "/integrated/alluvial.cells.by.sctype.indVintegrated.png"),
+       width = 15, height = 10)
 
 ## graph by individual 
 for (i in unique(l.dfs$int.ldfs$orig.ident)) {
@@ -263,11 +247,8 @@ for (i in unique(l.dfs$int.ldfs$orig.ident)) {
     ggtitle(paste(i))
   
   
-  ggsave(paste0(qc_plots_path, 
-                "/integrated/alluvial.cells.by.sctype.indVintegrated.",
-               i, ".png"),
-         width = 15,
-         height = 10)
+  ggsave(paste0(qc_plots_path, "/integrated/alluvial.cells.by.sctype.indVintegrated.", i,".png"),
+         width = 15, height = 10)
 }
 
 ## graph alluvial plot with clusters
@@ -294,10 +275,8 @@ l.dfs$int.ldfs@meta.data %>%
   scale_fill_viridis_d() +
   theme_classic()
 
-ggsave(paste0(qc_plots_path, 
-              "/integrated/alluvial.cells.by.sctype.indVintegrated.clusters.png"),
-       width = 22,
-       height = 12)
+ggsave(paste0(qc_plots_path, "/integrated/alluvial.cells.by.sctype.indVintegrated.clusters.png"),
+       width = 22, height = 12)
 
 ## counts per sample
 l.dfs$int.ldfs@meta.data %>% 
@@ -311,12 +290,13 @@ l.dfs$int.ldfs@meta.data %>%
   geom_point() +
   theme_classic() +
   xlab('')+ 
-  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=0.5, size = 4))
+  theme(axis.text.x = element_text(angle = 45, 
+                                   vjust = 0.5, 
+                                   hjust = 0.5, 
+                                   size = 4))
 
-ggsave(paste0(qc_plots_path, 
-              "/integrated/cell.count.per.sample.sctype.integrated.png"),
-       height = 5,
-       width = 5)
+ggsave(paste0(qc_plots_path, "/integrated/cell.count.per.sample.sctype.integrated.png"),
+       height = 5, width = 5)
 
 #### Integrated ScType vs. HypoMap [stopped here] ####
 # line 1952 in seurat_snseq_mouse_IMC.R
@@ -325,7 +305,7 @@ ggsave(paste0(qc_plots_path,
 int.ldfs <- l.dfs$int.ldfs
 
   save(int.ldfs, file = "./data/integrated_seurat_withScType.rda",
-       compress = "xz")
+       compress = compression)
   
 # run HypoMap and continue in updated_1.75script.R 
   # mostly exploratory comparisons between celltype annotation methods

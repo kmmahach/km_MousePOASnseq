@@ -2,6 +2,8 @@
 .Rhistory
 .RData
 .Ruserdata
+.DS_Store
+._.DS_Store
 /summary/
 /Scripts/km_cleanScripts/hdwgcna_env/
 /Scripts/km_cleanScripts/data/*

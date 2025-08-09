@@ -14,10 +14,10 @@ wget -nc https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 
 echo "=== [2/7] Installing or Updating Miniconda at $MINICONDA_DIR ==="
 if [ -d "$MINICONDA_DIR" ]; then
-    echo "⚠️  Miniconda already exists. Updating in place..."
+    echo "Miniconda already exists. Updating in place..."
     bash Miniconda3-latest-Linux-x86_64.sh -u -b -p $MINICONDA_DIR
 else
-    echo "🆕  Miniconda not found. Installing fresh..."
+    echo "Miniconda not found. Installing fresh..."
     bash Miniconda3-latest-Linux-x86_64.sh -b -p $MINICONDA_DIR
 fi
 
@@ -46,14 +46,13 @@ conda install -y numpy pandas scipy scikit-learn matplotlib seaborn umap-learn a
 # R packages (from conda-forge)
 conda install -y r-reticulate r-devtools r-seurat r-tidyverse r-data.table
 
-# Optional: install hdWGCNA from GitHub using Rscript
-# Optional: install UCell and hdWGCNA from GitHub using Rscript
+# Install UCell and hdWGCNA in R
 Rscript -e "devtools::install_github('carmonalab/UCell'); devtools::install_github('smorabit/hdWGCNA')"
 
 
-echo "✅ All done!"
-echo "➡️ To activate your environment in future sessions, run:"
-echo "   conda activate $CONDA_ENV_NAME"
+echo "All done!"
+echo "To activate your environment in future sessions, run:"
+echo "    conda activate $CONDA_ENV_NAME"
 
 
 
