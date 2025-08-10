@@ -2,9 +2,11 @@
 # package version and dependency log
 load_packages <- function(pkgs, 
                           out_prefix = "package_log", 
-                          auto_install = TRUE) {
+                          auto_install = TRUE,
+                          folder = getwd()) {
+  
   timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
-  out_dir <- "package_logs"
+  out_dir <- paste0(folder, "/package_logs")
   if (!dir.exists(out_dir)) dir.create(out_dir)
   report_file <- file.path(out_dir, paste0(out_prefix, "_package_report_", timestamp, ".txt"))
   

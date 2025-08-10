@@ -5,7 +5,7 @@
 .DS_Store
 ._.DS_Store
 /summary/
-/Scripts/km_cleanScripts/hdwgcna_env/
+/hdWGCNA/hdwgcna_env/
 /Scripts/km_cleanScripts/data/*
 !/Scripts/km_cleanScripts/data/km_rscvi_docker
 !/Scripts/km_cleanScripts/data/km_rawdata

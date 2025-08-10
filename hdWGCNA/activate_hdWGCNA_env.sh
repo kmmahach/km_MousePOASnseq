@@ -40,19 +40,26 @@ conda create -y -n $CONDA_ENV_NAME python=$PYTHON_VERSION r-base=$R_VERSION r-es
 echo "=== [7/7] Installing Python and R dependencies ==="
 conda activate $CONDA_ENV_NAME
 
-# Python packages (from conda-forge)
+# Python packages
 conda install -y numpy pandas scipy scikit-learn matplotlib seaborn umap-learn anndata scanpy
 
-# R packages (from conda-forge)
-conda install -y r-reticulate r-devtools r-seurat r-tidyverse r-data.table
+# Core R packages from conda-forge
+conda install -y r-reticulate r-devtools r-tidyverse r-data.table r-remotes
 
-# Install UCell and hdWGCNA in R
-Rscript -e "devtools::install_github('carmonalab/UCell'); devtools::install_github('smorabit/hdWGCNA')"
+echo "=== [8/8] Installing R packages from GitHub (specific versions) ==="
+# UCell (required for hdWGCNA)
+Rscript -e "remotes::install_github('carmonalab/UCell')"
+
+# Seurat v4.4.0 (!!!) specifically
+Rscript -e "remotes::install_github('satijalab/seurat', ref = 'v4.4.0')"
+
+# hdWGCNA
+Rscript -e "devtools::install_github('smorabit/hdWGCNA', ref = 'dev')"
+
+# RedRibbon
+Rscript -e "devtools::install_github('antpiron/RedRibbon')"
 
 
 echo "All done!"
 echo "To activate your environment in future sessions, run:"
 echo "    conda activate $CONDA_ENV_NAME"
-
-
-
