@@ -125,7 +125,8 @@ full_join(full_join(int.ldfs@reductions$umap@cell.embeddings %>%
 rm(tmp)
 
 #### Neuroendocrine genes; neuron stats ####
-## subset genes by sample
+
+# subset genes by sample
 select_neur.table_orig.ident %>% 
   mutate(All = 1) %>% 
   group_by(orig.ident,
@@ -172,13 +173,9 @@ select_neur.counts %>%
 ggsave('neurons/neuropeptides/pctNeurons_exprSelectGenes_by.indiv_genotype.png',
        height = 5, width = 5)
 
-#### GLM binomial
-### run glm on every cluster
-## use with proportion data
-# create empty data frame
+# GLM (binom) on cluster proportions
 neuron.genes.glm = data.frame(matrix(ncol = 7, nrow = 0))
 
-#provide column names
 colnames(neuron.genes.glm) <- c("contrast",
                                 "Estimate",
                                 "Std.error",
@@ -186,7 +183,8 @@ colnames(neuron.genes.glm) <- c("contrast",
                                 "adj.pvalue",
                                 "z.ratio",
                                 "Genes")
-## loop through each cluster
+
+# loop through each cluster to generate stats
 for (i in unique(select_neur.counts$Genes)) {
   
   # binomial GLM on sex and status w/ interaction term
@@ -235,8 +233,7 @@ for (i in unique(select_neur.counts$Genes)) {
   ggsave(paste0('neurons/neuropeptides/', i, '_binomialGLM_cell.count.png'),
          width = 6, height = 5)
   
-  ## run all pairwise comparison
-  # Tukey needed for all pairwise comparisons
+  # Tukey for all pairwise comparisons
   tmp2 = glm(cbind(Counts, Others) ~ orig.ident, 
              data = select_neur.counts %>% 
                filter(Genes == i) %>% 
@@ -259,7 +256,7 @@ for (i in unique(select_neur.counts$Genes)) {
                           z.value = NA) %>%
     mutate(Genes = i)
   
-  ## combine in data frame
+  # combine results
   neuron.genes.glm = neuron.genes.glm %>% 
     rbind(tmp.res.df) %>% 
     rbind(emm.res.df)
@@ -278,13 +275,12 @@ neuron.genes.glm = neuron.genes.glm %>%
   left_join(neuron.genes.glm.fdr)
 
 
-# create rounded p.value to make it easier to read
+# round p-vals to .0001
 neuron.genes.glm = neuron.genes.glm %>%
   mutate(adj.pvalue.round = ifelse(is.na(p.adjust.fdr),
                                    round(adj.pvalue, digits = 4),
                                    round(p.adjust.fdr, digits = 4)))
 
-# save glm table
 write_csv(neuron.genes.glm,
           file = 'neurons/stats/neuron_selectGenesGLM.csv')
 
@@ -328,7 +324,7 @@ select_neur.table_orig.ident %>%
 ggsave('neurons/neuropeptides/pctNeurons_exprSelectGenes_by_orig.ident.png',
        height = 5, width = 9)
 
-## graph table 
+# reduced gene subset
 select_neur.table_orig.ident %>% 
   mutate(All = 1) %>% 
   group_by(orig.ident) %>% 
@@ -352,7 +348,7 @@ select_neur.table_orig.ident %>%
 ggsave('neurons/neuropeptides/pctNeurons_exprSelectGenes_by_orig.ident_filtered.png',
        height = 5, width = 9)
 
-# subset genes
+# reduced subset again
 select_neur.table_orig.ident %>% 
   mutate(All = 1) %>% 
   group_by(orig.ident) %>% 
@@ -378,9 +374,6 @@ select_neur.table_orig.ident %>%
 
 ggsave('neurons/neuropeptides/pctNeurons_exprSubset_SelectGenes_by_orig.ident_filtered.png',
        height = 5, width = 9)
-
-
-
 
 
 #### DGE with limma ####
@@ -441,11 +434,3 @@ rrho_results <- get.RRHO(limma_results,
                          outdir = "./neurons/neuropeptides/RRHO")
 
   save(rrho_results, file = "./neurons/neuropeptides/RRHO/rrho_results.rda")
-
-  
-
-
-
-
-
-

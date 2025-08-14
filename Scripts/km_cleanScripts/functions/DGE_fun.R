@@ -98,7 +98,7 @@ as_named_list <- function(...) {
   setNames(values, names)
 }
 
-# subset Seurat obj
+# subset Seurat obj by gene list
 subset_by_gene <- function(seurat_obj, 
                            subset_genes, 
                            min_count = 2) {
@@ -121,7 +121,66 @@ subset_by_gene <- function(seurat_obj,
   return(gene_list)
 }
 
-#### processing for DGE ####
+# subset Seurat obj by idents (set Idents(seurat_obj) prior)
+subset_by_ident <- function(seurat_obj, 
+                            subset_idents,
+                            cluster = TRUE) {
+  
+  ident_list <- lapply(subset_idents, function(ident) {
+    
+    # subset to whatever metadata ident chosen 
+    keep_cells <- colnames(seurat_obj)[Idents(seurat_obj) == ident]
+    
+    if(cluster) {
+      cat(paste0("cluster ", ident, ": ", length(keep_cells), " cells retained\n"))
+    } else {
+      cat(paste0(ident, ": ", length(keep_cells), " cells retained\n")) 
+    }
+    
+    # Subset object
+    obj <- subset(seurat_obj, cells = keep_cells)
+    
+    if(cluster) {
+      obj@project.name <- paste0("cluster_", ident)
+    } else {
+      obj@project.name <- as.character(ident)
+    }
+    
+    obj
+  })
+  
+  
+  if(cluster) {
+    names(ident_list) <- paste0("cluster_", subset_idents)
+  } else {
+    names(ident_list) <- subset_idents
+  }
+
+  return(ident_list)
+}
+
+# separate function to make melt matrix for RR
+melt.matrix <- function (data,
+                         na.rm = FALSE, 
+                         value.name = "value",
+                         ...) {
+  Var1 <- Var2 <- NULL
+  
+  dt <- as.data.table(data)
+  colnames(dt) <- as.character(1:ncol(dt))
+  dt[, rownames := 1:nrow(dt)]
+  
+  melted_dt <- data.table::melt(dt, id.vars = "rownames", na.rm = na.rm, value.name = value.name)
+  colnames(melted_dt)  <- c("Var1", "Var2", "value")
+  melted_dt[, Var1 := as.double(Var1)]
+  melted_dt[, Var2 := as.double(Var2)]
+  
+  
+  
+  return(melted_dt)
+}
+
+#### processing for DGE/RRHO ####
 prep.for.DGE <- function(list_of_SeuratObj,
                          assay = 'integrated',
                          SCTransformed = TRUE,
@@ -142,8 +201,8 @@ prep.for.DGE <- function(list_of_SeuratObj,
   get.data <- \(x) {
     
     gene <- Seurat::Project(x)
-    message("Subset is set to: ", gene,
-            "; if this is not what you intended, set project.name to subset")
+    cat(paste0("Subset is set to: ", gene, 
+               "; if this is not what you intended, set project.name to subset\n"))
     
     if (is.null(x@meta.data$Cell_ID)) {
       x@meta.data$Cell_ID <- rownames(x@meta.data)
@@ -364,26 +423,6 @@ run_limmatrend <- function(prep_results_list,
   }
   
   return(results_list)
-}
-
-melt.matrix <- function (data,
-                         na.rm = FALSE, 
-                         value.name = "value",
-                         ...) {
-  Var1 <- Var2 <- NULL
-  
-  dt <- as.data.table(data)
-  colnames(dt) <- as.character(1:ncol(dt))
-  dt[, rownames := 1:nrow(dt)]
-  
-  melted_dt <- data.table::melt(dt, id.vars = "rownames", na.rm = na.rm, value.name = value.name)
-  colnames(melted_dt)  <- c("Var1", "Var2", "value")
-  melted_dt[, Var1 := as.double(Var1)]
-  melted_dt[, Var2 := as.double(Var2)]
-  
-  
-  
-  return(melted_dt)
 }
 
 ggRedRibbon.rrho.scale <- function (self, 
@@ -625,23 +664,19 @@ get.RRHO <- function(results_list,
     
     # Run the overlap using evolutionary algorithm,
     # computing permutation adjusted p-value for the four quadrants
-    quad <- quadrants(rr, 
-                      algorithm="ea",
-                      permutation=TRUE, 
-                      whole=FALSE)
-    
-    # create list of RRHO outcomes
-    RedRibbon.quads <- data.frame(Gene = df[quad$upup$positions,]$gene, RRquadrant = 'upup') %>% 
-      rbind(data.frame(Gene = df[quad$downdown$positions,]$gene, RRquadrant = 'downdown')) %>% 
-      rbind(data.frame(Gene = df[quad$updown$positions,]$gene, RRquadrant = 'updown')) %>% 
-      rbind(data.frame(Gene = df[quad$downup$positions,]$gene, RRquadrant = 'downup'))
+      
+    RedRibbon.quads <- quadrants(rr,
+                                 algorithm = "ea",
+                                 permutation = TRUE,
+                                 whole = FALSE)
     
     # store rrho object and RedRibbon.quads in output list
-    rrho_results[[dataset_name]] <- append(rrho_obj, RedRibbon.quads)
+    rrho_results[[dataset_name]] <- append(rrho_obj, 
+                                           as_named_list(RedRibbon.quads, df))
     
     # RedRibbon plot
     p1 <- ggRedRibbon.rrho.scale(rr, 
-                                 quadrants = quad,
+                                 quadrants = RedRibbon.quads,
                                  new.max.log = new.max.log) + 
       coord_fixed(ratio = 1, 
                   clip = "off") +
@@ -674,5 +709,46 @@ get.RRHO <- function(results_list,
   
  return(rrho_results) 
   
+}
+
+# create list of RRHO outcomes and deal with empty quadrants for graphing
+graphRRHO <- function(rr, df) {
+  
+  safe_quadrant_df <- function(quad_data, label, df) {
+    if (is.null(quad_data) || is.null(quad_data$positions) || length(quad_data$positions) == 0) {
+      message(dataset_name, ": quadrant '", label, "' is empty — skipping.")
+      return(data.frame(Gene = NA,
+                        RRquadrant = label,
+                        stringsAsFactors = FALSE))
+    } else {
+      return(data.frame(Gene = df[quad_data$positions, "gene"],
+                        RRquadrant = label,
+                        stringsAsFactors = FALSE))
+    }
+  }
+  
+  # Try to get quadrants, return empty df if it fails
+  quad <- tryCatch(
+    quadrants <- rr,
+    error = function(e) {
+      message("Error getting quadrants: ", e$message)
+      return(NULL)
+    }
+  )
+  
+  if (is.null(quad)) {
+    return(data.frame(Gene = character(0),
+                      RRquadrant = character(0),
+                      stringsAsFactors = FALSE))
+  }
+  
+  RedRibbon.quads <- rbind(
+    safe_quadrant_df(quad$upup, "upup", df),
+    safe_quadrant_df(quad$downdown, "downdown", df),
+    safe_quadrant_df(quad$updown, "updown", df),
+    safe_quadrant_df(quad$downup, "downup", df)
+  )
+  
+  return(RedRibbon.quads)
 }
 

@@ -8,10 +8,10 @@ compression = "xz" # slower, but usually smallest compression
 setwd(root.dir) 
 
 # functions
-source("./Scripts/km_cleanScripts/functions/network_graph_fun.R")
+source("./Scripts/km_cleanScripts/functions/DGE_fun.R")
 
 # libraries (save dependencies and package versions)
-load_packages(c("tidyverse", "Seurat", "limma", "edgeR", "RedRibbon"), 
+load_packages(c("tidyverse", "Seurat", "limma", "edgeR", "RedRibbon", "RRHO2"), 
               out_prefix = "03", folder = "./Scripts/km_cleanScripts")
 
 #### load data ####
@@ -49,7 +49,8 @@ Idents(object = MSCneurons.reclust) <- "seurat_clusters"
 # UMAPs - all neuron clusters
 MSCneurons.reclust %>%
   DimPlot(label = TRUE) +
-  theme_classic()
+  theme_classic() + 
+  ggtitle('neuron.seurat.clusters')
 
 ggsave('./neurons/UMAP/neurons.recluster.clusters.png',
        height = 10, width = 12)
@@ -86,44 +87,31 @@ MSCneurons.reclust %>%
                                 'red'))
 
 ggsave('./neurons/UMAP/neurons.recluster.status.png',
-       height = 10, width = 10)
+       height = 10, width = 12)
 
 # indiv_genotype (predicted by souporcell) for each group
-# dom male
-subset(MSCneurons.reclust, orig.ident == "male.dom.data") %>%
-  DimPlot(group.by = 'indiv_genotype')+
-  theme_classic() +
-  ggtitle('Male Dom - indiv_genotype')
+# set idents
+Idents(MSCneurons.reclust) = "orig.ident"
+subset_idents <- unique(Idents(MSCneurons.reclust))
 
-ggsave('./neurons/UMAP/neurons.recluster.maleDom_genotypes.png',
-       height = 10, width = 12)
+# subset Seurat obj
+reclust <- subset_by_ident(MSCneurons.reclust, 
+                           subset_idents = subset_idents,
+                           cluster = FALSE)
 
-# dom female
-subset(MSCneurons.reclust, orig.ident == "female.dom.data") %>%
-  DimPlot(group.by = 'indiv_genotype')+
-  theme_classic() +
-  ggtitle('Female Dom - indiv_genotype')
+lapply(reclust, \(x) {
+  x %>% 
+    DimPlot(group.by = 'indiv_genotype') +
+    theme_classic() +
+    ggtitle(paste0(x@project.name, ' - indiv_genotype'))
+  
+  ggsave(paste0('./neurons/UMAP/', 
+         sub("\\.data$", "", x@project.name), 
+         '_neurons.recluster_genotypes.png'),
+         height = 5, width = 6) 
+  }
+)
 
-ggsave('./neurons/UMAP/neurons.recluster.femaleDom_genotypes.png',
-       height = 10, width = 12)
-
-# sub male
-subset(MSCneurons.reclust, orig.ident == "male.sub.data") %>%
-  DimPlot(group.by = 'indiv_genotype')+
-  theme_classic() + 
-  ggtitle('Male Sub - indiv_genotype')
-
-ggsave('./neurons/UMAP/neurons.recluster.maleSub_genotypes.png',
-       height = 10, width = 12)
-
-# sub female
-subset(MSCneurons.reclust, orig.ident == "female.sub.data") %>%
-  DimPlot(group.by = 'indiv_genotype')+
-  theme_classic() +
-  ggtitle('Female Sub - indiv_genotype')
-
-ggsave('./neurons/UMAP/neurons.recluster.femaleSub_genotypes.png',
-       height = 10, width = 12)
 
 # dom candidate genes?
 DotPlot(MSCneurons.reclust,
@@ -196,7 +184,7 @@ ggsave('./neurons/clustersVorig.ident.neurons.recluster.genotype.scaled.png',
 #### Prep for stats ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
 
-#### cluster names
+# get cluster names? 
 MSCneurons.reclust@meta.data %>%
   dplyr::select(parent_id.exp.prob,
          parent_id.broad.prob,
@@ -209,10 +197,10 @@ MSCneurons.reclust@meta.data %>%
   ungroup() %>% 
   mutate(Percent = 100*Freq/total) -> neuron.cluster.names
 
-## save neuron cluster names
+# save neuron cluster names
 write_csv(neuron.cluster.names, 'neurons/stats/neuron_clusterNames.csv')
 
-## add variable for status and sex
+# add variable for status and sex
 neuron.cluster.genotype.count %>% 
   mutate(Sex = ifelse(grepl("female", orig.ident), "female", "male")) %>% 
   mutate(Status = ifelse(grepl("dom", orig.ident), "dom", "sub")) -> neuron.cluster.genotype.count
@@ -394,7 +382,7 @@ neuron.cluster.glm.p = neuron.cluster.glm %>%
   pivot_wider(names_from = contrast,
               values_from = adj.pvalue.round) 
 
-#### Neuron cluster graphs ####
+#### Neuron cluster distributions ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
 
 ### Number of reads and genes per cluster
@@ -452,8 +440,7 @@ ggsave('neurons/nCount_nFeature_byCluster.png',
        p1 + p2 + plot_layout(ncol = 1),
        height = 8, width = 14)
 
-#### create counts table 
-## sample by cluster
+# create counts table - sample by cluster
 table_orig.idents_by_clusters <- MSCneurons.reclust@meta.data %>%
   group_by(orig.ident, integrated_snn_res.0.4) %>%
   summarize(count = n()) %>%
@@ -463,7 +450,7 @@ table_orig.idents_by_clusters <- MSCneurons.reclust@meta.data %>%
   dplyr::select(c('orig.ident', 'total_cell_count', everything())) %>%
   arrange(factor(orig.ident, levels = levels(MSCneurons.reclust@meta.data$orig.ident)))
 
-## cluster by sample
+# cluster by sample
 table_clusters_by_orig.idents <- MSCneurons.reclust@meta.data %>%
   dplyr::rename('cluster' = 'integrated_snn_res.0.4') %>%
   group_by(cluster, orig.ident) %>%
@@ -474,7 +461,7 @@ table_clusters_by_orig.idents <- MSCneurons.reclust@meta.data %>%
   dplyr::select(c('cluster', 'total_cell_count', everything())) %>%
   arrange(factor(cluster, levels = levels(MSCneurons.reclust@meta.data$integrated_snn_res.0.4)))
 
-### Percent of cells per cluster by sample
+# Percent of cells per cluster by sample
 MSCneurons.reclust@meta.data %>% 
   group_by(orig.ident) %>%
   tally() -> temp_labels
@@ -482,7 +469,6 @@ MSCneurons.reclust@meta.data %>%
 p1 <- table_orig.idents_by_clusters %>%
   dplyr::select(-c('total_cell_count')) %>%
   reshape2::melt(id.vars = 'orig.ident') %>%
-  # mutate(orig.ident = factor(orig.ident, levels = levels(MSCneurons.reclust@meta.data$orig.ident))) %>%
   ggplot(aes(orig.ident, value)) +
   geom_bar(aes(fill = variable), 
            position = 'fill',
@@ -534,7 +520,6 @@ p2 <- table_clusters_by_orig.idents %>%
                 vjust = -1), 
             color = 'black', 
             size = 2.8) +
-  # scale_fill_manual(name = 'orig.ident', values = custom_colors$discrete) +
   scale_y_continuous(name = 'Percentage [%]', 
                      labels = scales::percent_format(),
                      expand = c(0.01,0)) +
@@ -562,7 +547,7 @@ ggsave('neurons/sample_composition_ClustersByPercent.png',
   width = 18, height = 8)
 
 
-### Count of cells per cluster by orig.ident
+# cells per cluster by orig.ident
 MSCneurons.reclust@meta.data %>%
   group_by(orig.ident) %>%
   tally() -> temp_labels
@@ -570,7 +555,6 @@ MSCneurons.reclust@meta.data %>%
 p1 <- table_orig.idents_by_clusters %>%
   dplyr::select(-c('total_cell_count')) %>%
   reshape2::melt(id.vars = 'orig.ident') %>%
-  # mutate(orig.ident = factor(orig.ident, levels = levels(MSCneurons.reclust@meta.data$orig.ident))) %>%
   ggplot(aes(orig.ident, value)) +
   geom_bar(aes(fill = variable),
            position = 'stack', 
@@ -582,7 +566,6 @@ p1 <- table_orig.idents_by_clusters %>%
                 vjust = -1),
             color = 'black', 
             size = 2.8) +
-  # scale_fill_manual(name = 'Cluster', values = custom_colors$discrete) +
   scale_y_continuous(name = 'Number of cells', 
                      labels = scales::comma, expand = c(0.01, 0)) +
   coord_cartesian(clip = 'off') +
@@ -604,15 +587,12 @@ MSCneurons.reclust@meta.data %>%
 p2 <- table_clusters_by_orig.idents %>%
   dplyr::select(-c('total_cell_count')) %>%
   reshape2::melt(id.vars = 'cluster') %>%
-  # mutate(cluster = factor(cluster, levels = levels(MSCneurons.reclust@meta.data$integrated_snn_res.0.4))) %>%
   ggplot(aes(cluster, value)) +
   geom_bar(aes(fill = variable), position = 'stack', stat = 'identity') +
   geom_text(
     data = temp_labels,
     aes(x = cluster, y = Inf, label = paste0('n = ', format(n, big.mark = ',', trim = TRUE)), vjust = -1),
-    color = 'black', size = 2.8
-  ) +
-  # scale_fill_manual(name = 'orig.ident', values = custom_colors$discrete) +
+    color = 'black', size = 2.8) +
   scale_y_continuous(labels = scales::comma, expand = c(0.01, 0)) +
   coord_cartesian(clip = 'off') +
   theme_bw() +
@@ -636,11 +616,12 @@ ggsave('neurons/composition_orig.idents_ClustersByNum.png',
   width = 18, height = 8)
 
 #### Build neuron hierarchical tree ####
-setwd(paste0(root.dir, "/DGE_CellTypes"))
 
 # https://romanhaa.github.io/projects/scrnaseq_workflow/#clustering
 
-### create tree of cell types
+setwd(paste0(root.dir, "/DGE_CellTypes"))
+
+# hierarchical cluster tree
 BuildClusterTree(MSCneurons.reclust,
                  dims = 1:15,
                  reorder = FALSE,
@@ -648,25 +629,10 @@ BuildClusterTree(MSCneurons.reclust,
                  slot = 'data',
                  assay = "SCT") -> MSCneurons.reclust
 
-## create tree
+# create tree
 neuron.tree <- MSCneurons.reclust@tools$BuildClusterTree
-# tree$tip.label <- paste0("Cluster ", tree$tip.label)
 
-# # convert tree to tibble
-# neuron.tree = as_tibble(neuron.tree)
-# 
-# ## add cell type data
-# neuron.tree = full_join(neuron.tree,
-#                         MSCneurons.reclust@meta.data %>% 
-#                    dplyr::select(integrated_snn_res.0.4,
-#                                  parent_id.exp.prob) %>% 
-#                    distinct(),
-#                  by = c("label" = "integrated_snn_res.0.4"))
-# 
-# # convert back to tree
-# neuron.tree = treeio::as.treedata(neuron.tree)
-
-### graph tree of celltypes
+# graph tree of celltypes
 ggtree::ggtree(neuron.tree, aes(x, y)) +
   scale_y_reverse() +
   ggtree::geom_tree() +
@@ -684,13 +650,11 @@ ggsave('neurons/neuron.cluster.tree.png',
 #### Neuron marker specificity score ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
 
-### Prep seurat object for running find markers 
-## need to run before FindAllMarkers
-# needs to recorrect again after filtering down to neurons? 
+# Prep seurat object for running find markers - need to run before FindAllMarkers
 PrepSCTFindMarkers(MSCneurons.reclust,
                    assay = "SCT") -> MSCneurons.reclust
 
-### calculate specificity score with DEGs for each cluster
+# calculate specificity score with DEGs for each cluster
 FindAllMarkers(MSCneurons.reclust, 
                logfc.threshold = 0.1, # increase to increase speed
                test.use = 'wilcox',
@@ -705,11 +669,9 @@ neuron.markers.df %>%
 neuron.markers.df %>% 
   mutate(specificity = avg_log2FC*(pct.1/pct.2)) -> neuron.markers.df
 
-## save data
 write_csv(neuron.markers.df, 'neurons/stats/neuron_clusterMarkers.csv')
 
-### create heatmap of 6 top markers per cluster
-## reduce to top 6 genes per cluster
+# heatmap of 6 top markers per cluster - reduce to top 6 genes per cluster
 neuron.markers.df %>% 
   group_by(cluster) %>% 
   slice_max(specificity, n = 6) %>% 
@@ -750,237 +712,64 @@ neuron.markers.df.reduce.heatmap %>%
 #### Neuron cluster limma-trend (DGE) ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
 
-### create a loop for each neuron cluster 
-# limmatrend
 # set idents
-Idents(object = MSCneurons.reclust) <- "seurat_clusters"
+Idents(MSCneurons.reclust) = "seurat_clusters"
+DefaultAssay(MSCneurons.reclust) = "SCT"
 
-## run across all neuron clusters
-cluster_nums = levels(unique(MSCneurons.reclust@meta.data$seurat_clusters))
+# get clusters
+subset_idents <- sort(unique(Idents(MSCneurons.reclust)))
 
-# remove cluster 13 - not enough cells for contrasts 
-for (j in cluster_nums[-length(cluster_nums)]) {
+# exclude cluster 13 for now - not enough nuclei
+subset_idents = subset_idents[-length(subset_idents)]
 
-  # create new folder
-  dir.create(paste0('./neurons/stats/limma_trend/cluster_', j))
-  
-  #subset to neuron clusters
-  tmp = subset(MSCneurons.reclust, idents = j)
-  
-  # subset with SCT data
-  DefaultAssay(tmp) = 'SCT'
-  
-  ### extract gene expression and orig.idents from neuron_cluster
-  ## create expression dataframe of neuropeptides
-  ### calculate variable genes
-  
-  # use integrated assay for variable features
-FindVariableFeatures(tmp, 
-                     assay = 'integrated',
-                     selection.method = "vst", 
-                     verbose = F) -> tmp.var
+# subset Seurat obj
+l.dfs <- subset_by_ident(MSCneurons.reclust, 
+                         subset_idents = subset_idents)
 
-  # identify top variable genes
-VariableFeatures(tmp.var, 
-                 assay = 'integrated') -> neuron_cluster.reduce.group.topgenes.prep
-  
-  # create dummy
-full_join(full_join(tmp@reductions$umap@cell.embeddings %>% 
-                      as.data.frame() %>% 
-                      rownames_to_column("Cell.id"), 
-                    tmp@meta.data %>%
-                      rownames_to_column("Cell.id")),
-          tmp@assays$SCT@data %>% 
-            as.data.frame() %>% t() %>%
-            as.data.frame() %>% 
-            rownames_to_column('Cell.id')) -> tmp.expression
-  
-  
-  ## create vector of factor
-tmp.expression %>% 
-    mutate(neuron_cluster.orig.ident = orig.ident %>% 
-             as.factor()) %>% 
-    pull(neuron_cluster.orig.ident) %>% 
-    droplevels() -> neuron_cluster.reduce.DomvsSub.vector.list.sct.prep
-  
-  ### counts matrix
-  ## raw read count matrix
-  ## rows = genes, columns = cells
-  # only keep 500 variable genes
-  # set negative values to 0
+# raw counts and norm.counts of variable genes
+dge_data <- prep.for.DGE(l.dfs, 
+                         selection.method = "vst", 
+                         SCTransformed = TRUE, 
+                         assay = 'integrated')
 
-GetAssayData(tmp, assay = 'SCT') %>% 
-    as_tibble(rownames = NA) %>% 
-    rownames_to_column('gene') %>% 
-    dplyr::select(c(gene, tmp.expression %>% 
-                      pull(Cell.id))) %>% 
-    filter(gene %in% neuron_cluster.reduce.group.topgenes.prep) %>% 
-    column_to_rownames('gene') %>% 
-    as.matrix() %>% 
-    pmax(0) -> neuron_cluster.reduce.vector.count.sct.prep
-  
-  #create list
-neuron_cluster.reduce.vector.limma.sct.prep = 
-  list(count = neuron_cluster.reduce.vector.count.sct.prep,
-       condt = neuron_cluster.reduce.DomvsSub.vector.list.sct.prep)
-  
-  ### run function  
-neuron_cluster.limma.results.sct = run_limmatrend_neuron_cluster(neuron_cluster.reduce.vector.limma.sct.prep)
-  
-  # save results to dataframe
-full_join(neuron_cluster.limma.results.sct$ttDvsS %>% 
-            rename_with(~paste0(.,"_DvsS")) %>% 
-            rownames_to_column("Gene"),
-          neuron_cluster.limma.results.sct$ttDvsSM %>%
-            rename_with(~paste0(.,"_DvsS_M")) %>% 
-            rownames_to_column("Gene")) %>% 
-    full_join(neuron_cluster.limma.results.sct$ttDvsSF %>% 
-                rename_with(~paste0(.,"_DvsS_F")) %>% 
-                rownames_to_column("Gene")) %>% 
-    full_join(neuron_cluster.limma.results.sct$ttMvsF %>% 
-                rename_with(~paste0(.,"_MvsF")) %>% 
-                rownames_to_column("Gene")) %>% 
-    full_join(neuron_cluster.limma.results.sct$ttMvsFD %>% 
-                rename_with(~paste0(.,"_MvsFD")) %>% 
-                rownames_to_column("Gene")) %>% 
-    full_join(neuron_cluster.limma.results.sct$ttMvsFS %>% 
-                rename_with(~paste0(.,"_MvsFS")) %>% 
-                rownames_to_column("Gene")) -> neuron_cluster.limma.results.sct.df
-  
-  # add color for significance  
-neuron_cluster.limma.results.sct.df %>% 
-    mutate(Sig_DvsS = ifelse(adj.P.Val_DvsS <= 0.05, 'Sig', 'Not Sig'),
-           Direction.type_DvsS = ifelse(logFC_DvsS > 0, 'up', 'down'),
-           Sig.direction_DvsS = ifelse(Sig_DvsS == 'Sig', 
-                                       Direction.type_DvsS, 
-                                       Sig_DvsS)) %>% 
-    mutate(Sig_DvsS_M = ifelse(adj.P.Val_DvsS_M <= 0.05, 'Sig', 'Not Sig'),
-           Direction.type_DvsS_M = ifelse(logFC_DvsS_M > 0, 'up', 'down'),
-           Sig.direction_DvsS_M = ifelse(Sig_DvsS_M == 'Sig',
-                                         Direction.type_DvsS_M,
-                                         Sig_DvsS_M)) %>% 
-    mutate(Sig_DvsS_F = ifelse(adj.P.Val_DvsS_F <= 0.05, 'Sig','Not Sig'),
-           Direction.type_DvsS_F = ifelse(logFC_DvsS_F > 0,'up','down'),
-           Sig.direction_DvsS_F = ifelse(Sig_DvsS_F == 'Sig',
-                                         Direction.type_DvsS_F,
-                                         Sig_DvsS_F)) %>% 
-    mutate(Sig_MvsF = ifelse(adj.P.Val_MvsF <= 0.05,'Sig','Not Sig'),
-           Direction.type_MvsF = ifelse(logFC_MvsF > 0, 'up', 'down'),
-           Sig.direction_MvsF = ifelse(Sig_MvsF == 'Sig',
-                                       Direction.type_MvsF,
-                                       Sig_MvsF)) %>% 
-    mutate(Sig_MvsFD = ifelse(adj.P.Val_MvsFD <= 0.05, 'Sig', 'Not Sig'),
-           Direction.type_MvsFD = ifelse(logFC_MvsFD > 0, 'up', 'down'),
-           Sig.direction_MvsFD = ifelse(Sig_MvsFD == 'Sig',
-                                        Direction.type_MvsFD,
-                                        Sig_MvsFD)) %>% 
-    mutate(Sig_MvsFS = ifelse(adj.P.Val_MvsFS <= 0.05, 'Sig', 'Not Sig'),
-           Direction.type_MvsFS = ifelse(logFC_MvsFS > 0, 'up', 'down'),
-           Sig.direction_MvsFS = ifelse(Sig_MvsFS == 'Sig',
-                                        Direction.type_MvsFS,
-                                        Sig_MvsFS)) -> neuron_cluster.limma.results.sct.df
-  
-  # save data
-write_csv(neuron_cluster.limma.results.sct.df,
-          file = paste0('./neurons/stats/limma_trend/cluster_',
-                        j, '/', j,
-                        '_neuropeptides.neuron_cluster.limmaSCTdf.csv'))
-  
-  
-  ##graph volcano plot
-  # create comparison list
-limma.genotpye.vector = c("DvsS",
-                          "DvsS_M",
-                          "DvsS_F",
-                          "MvsF",
-                          "MvsFD",
-                          "MvsFS")
+# get results and graph p-values
+limma_results <- run_limmatrend(dge_data$results, "./neurons/stats/limma_trend")
 
-  for (i in limma.genotpye.vector) {
-    # graph volcano plot
-    neuron_cluster.limma.results.sct.df %>% 
-      mutate(sig.label = ifelse(get(paste0("Sig_", i)) == 'Sig', Gene, '')) %>% 
-      ggplot(aes(x = get(paste0("logFC_", i)),
-                 y = -log10(get(paste0("adj.P.Val_", i))),
-                 color = get(paste0("Sig.direction_", i))))+
-      geom_hline(yintercept = -log10(0.05),
-                 linetype = 'dotted') +
-      geom_point(size = 5) +
-      theme_classic() + 
-      scale_color_manual(values=c("21B9CA", 
-                                  "grey", 
-                                  "orange3")) +
-      geom_text(aes(label = sig.label),
-                vjust = 0, 
-                nudge_y = 0.10,
-                size = 5) +
-      theme(text = element_text(size = 20),
-            legend.position = 'none') +
-      xlab(paste0("logFC_", i)) +
-      ylab(paste0("-log10(adj.P.Val_", i,")")) +
-      ggtitle(paste0(i, " volcano plot"))
-    
-    ggsave(paste0('./neurons/stats/limma_trend/cluster_',
-                  j, '/', j,
-                  '_limma.neuron_cluster', i, '.reduce.volcano.png'),
-           width = 5, height = 5, create.dir = TRUE)
-  }
-}
+save(limma_results, file = "./neurons/stats/limma_trend/neuronCluster_limma_results.rda")
 
-#### Red ribbon neuron clusters ####
+#### RRHO/RedRibbon ####
 setwd(paste0(root.dir, "/DGE_CellTypes/neurons"))
 
-# exclude cluster 13
-for (j in c(0:12)) {
-  
-  ## load data 
-  tmp = read.csv(paste0('./stats/limma_trend/cluster_', j, '/', j,
-                        '_neuropeptides.neuron_cluster.limmaSCTdf.csv'))
-  
-  ### compare dom vs sub across sexes
-  
-  # males only
-  neuron_cluster.DvsS.M.rrho2 = data.frame(gene = tmp$Gene,
-                                           value = -log10(tmp$P.Value_DvsS_M),
-                                           direction = tmp$Direction.type_DvsS_M, 
-                                           stringsAsFactors = FALSE)
-  # set positive negative
-  neuron_cluster.DvsS.M.rrho2 = neuron_cluster.DvsS.M.rrho2 %>% 
-    mutate(value = ifelse(direction == 'down', -1*value, value)) %>% 
-    dplyr::select(-c(direction))
-  
-  # females only
-  neuron_cluster.DvsS.F.rrho2 = data.frame(gene = tmp$Gene,
-                                           value = -log10(tmp$P.Value_DvsS_F),
-                                           direction = tmp$Direction.type_DvsS_F,
-                                           stringsAsFactors = FALSE)
-  # set positive negative
-  neuron_cluster.DvsS.F.rrho2 = neuron_cluster.DvsS.F.rrho2 %>% 
-    mutate(value = ifelse(direction == 'down', -1*value, value)) %>% 
-    dplyr::select(-c(direction))
+# how to determine max log scale before graphing? 
+max.log.scale = 100;
+# make sure these match upper/lower case
+sex = c("Female", "Male");
+status = c("Dom", "Sub");
 
-  RedRibbon.all(celltype = paste0("neuron_cluster_", j),
-                dataset.a = neuron_cluster.DvsS.M.rrho2,
-                dataset.b = neuron_cluster.DvsS.F.rrho2,
-                dataset.a.type = "male",
-                dataset.b.type = "female",
-                a.variable = "value",
-                b.variable = "value",
-                new.max.log = NULL,
-                file.name = './stats/RedRibbon/')
-}
+rrho_results <- get.RRHO(limma_results,
+                         group.by = sex,
+                         compare.across = status,
+                         new.max.log = max.log.scale,
+                         outdir = "./RRHO")
 
-# count genes in each quadrant
-for (j in c(0:12)) {
+save(rrho_results, file = "./RRHO/rrho_results.rda")
+
+
+# graph gene counts in each RR quadrant
+newlist = list()
+
+for (dataset_name in names(rrho_results)) {
+  quads <- rrho_results[[dataset_name]]$RedRibbon.quads
+  df <- rrho_results[[dataset_name]]$df
   
-  ## load data 
-  tmp = read.csv(paste0('./stats/RedRibbon/neuron_cluster_', j,
-                        '.quadrant.genes.csv'))
+  newlist[[dataset_name]] <- graphRRHO(quads, df)
+  df <- data.frame(newlist[[dataset_name]])
   
-  # graph count of genes per quadrant
-  tmp %>% 
+  df %>% 
     group_by(RRquadrant) %>% 
-    summarise(Total = n()) %>% 
+    summarise(Count = n(),
+              NAs = sum(is.na(Gene))) %>% 
+    mutate(Total = ifelse(NAs > 0, Count - NAs, Count)) %>% 
     as.data.frame() %>% 
     ggplot(aes(x = reorder(RRquadrant, -Total),
                y = Total,
@@ -989,11 +778,15 @@ for (j in c(0:12)) {
     theme_classic() +
     ylab('Number of genes per quadrant') +
     xlab('') +
-    ggtitle(paste0('Neuron cluster ', j,' RR quadrants'))
+    ggtitle(paste0('Neuron ', dataset_name,' RR quadrants'))
   
-  ggsave(paste0('./stats/RedRibbon/neuron_cluster_', j,
-                'RR_quad_genes_count.png'),
+  cat("Saving plot for", dataset_name, "\n")
+  
+  ggsave(paste0('./neurons/RRHO/', dataset_name,
+                '/RR_quad_genes_count.png'),
          width = 7, height = 4)
-  
+
 }
+
+
 
