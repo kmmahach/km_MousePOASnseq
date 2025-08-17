@@ -101,11 +101,12 @@ as_named_list <- function(...) {
 # subset Seurat obj by gene list
 subset_by_gene <- function(seurat_obj, 
                            subset_genes, 
+                           slot = "counts",
                            min_count = 2) {
   
   gene_list <- lapply(subset_genes, function(gene) {
     
-    counts <- GetAssayData(seurat_obj, slot = "counts")[gene, ]
+    counts <- GetAssayData(seurat_obj, slot = slot)[gene, ]
     keep_cells <- names(counts[counts >= min_count])
 
     cat(paste0(gene, ": ", length(keep_cells), " cells retained\n"))

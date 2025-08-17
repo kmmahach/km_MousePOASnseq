@@ -65,7 +65,7 @@ DotPlot(int.ldfs,
         col.min = 0) +
   theme_classic()
 
-ggsave('neurons/selectGenes_neurons.png',
+ggsave('neurons/neuroendocrine_genes/selectGenes_neurons.png',
        height = 4, width = 9)
 
 #### Candidate neuroendocrine genes ####
@@ -132,7 +132,7 @@ sum_neur_indiv %>%
   xlab('') + ylab('% of neurons') +
   ggtitle('Percent nuclei expressing neur-endo genes')
 
-ggsave('neurons/neuroendocrine_genes/pctNeurons_exprSelectGenes_by_indiv.png',
+ggsave('neurons/neuroendocrine_genes/pctNeurons_exprSelectGenes_by.indiv_genotype.png',
        height = 5, width = 10)
 
 # percent of neurons expr select genes by group
