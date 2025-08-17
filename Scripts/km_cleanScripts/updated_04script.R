@@ -274,7 +274,7 @@ for (gene in subset_genes) {
     theme_classic() +
     ggtitle(paste0(gene," neurons: binomial GLM"))
   
-  ggsave(paste0('neurons/neuroendocrine_genes/selectGenesGLM/', gene, '_binomGLM_cell.count.png'),
+  ggsave(paste0('neurons/neuroendocrine_genes/selectGenesGLM/graphs', gene, '_binomGLM_cell.count.png'),
          width = 6, height = 5)
   
   # Average marginal effects (AMEs)
@@ -295,7 +295,7 @@ for (gene in subset_genes) {
   
   merplots <- plot_mer_facet(mer, group = gene)
   
-  ggsave(paste0('neurons/neuroendocrine_genes/selectGenesGLM/', gene, '_MER_cell.count.png'),
+  ggsave(paste0('neurons/neuroendocrine_genes/selectGenesGLM/graphs/', gene, '_MER_cell.count.png'),
          plot = merplots, width = 12, height = 5)
   
   write_csv(mer,
@@ -374,11 +374,11 @@ for (gene in subset_genes) {
 
 
 write_csv(neuron.genes.glm,
-          file = 'neurons/neuroendocrine_genes/selectGenesGLM/neuron_geneGLM.csv')
+          file = 'neurons/neuroendocrine_genes/selectGenesGLM/selectGenes_neuronGLM.csv')
 write_csv(neuron.genes.pairwise,
-          file = 'neurons/neuroendocrine_genes/selectGenesGLM/neuron_genes_pairwise.csv')
+          file = 'neurons/neuroendocrine_genes/selectGenesGLM/selectGenes_neuron_pairwise.csv')
 write_csv(neuron.genes.modglm,
-          file = 'neurons/neuroendocrine_genes/selectGenesGLM/neuron_genes_modglm.csv')
+          file = 'neurons/neuroendocrine_genes/selectGenesGLM/selectGenes_neuron_modglm.csv')
 
 
 #### DGE with limma ####

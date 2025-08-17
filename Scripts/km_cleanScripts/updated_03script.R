@@ -231,7 +231,7 @@ select_neur %>%
   mutate(Percent = 100*Freq/total) -> neuron.cluster.names
 
 # save neuron cluster names
-write_csv(neuron.cluster.names, 'neurons/stats/neuron_clusterNames.csv')
+write_csv(neuron.cluster.names, 'neurons/cluster_stats/neuron_clusterNames.csv')
 
 # format data
 sum_neur_indiv %>%
@@ -311,7 +311,7 @@ neuron.cluster.aov <- neuron.cluster.aov[order(neuron.cluster.aov$seurat_cluster
 
 
 # save anova table
-write_csv(neuron.cluster.aov, 'neurons/stats/neuron_clusterANOVA.csv')
+write_csv(neuron.cluster.aov, 'neurons/cluster_stats/neuron_clusterANOVA.csv')
 
 
 #### GLM binomial ####
@@ -371,7 +371,7 @@ for (i in unique(dat.for.stats$seurat_clusters)) {
     theme_classic() +
     ggtitle(paste0("Cluster", i," neurons: binomial GLM"))
   
-  ggsave(paste0('neurons/stats/neuron_clusterGLM/graphs/cluster_', i, '_binomGLM_cell.count.png'),
+  ggsave(paste0('neurons/cluster_stats/neuron_clusterGLM/graphs/cluster_', i, '_binomGLM_cell.count.png'),
          width = 6, height = 5)
   
   # Average marginal effects (AMEs)
@@ -392,11 +392,11 @@ for (i in unique(dat.for.stats$seurat_clusters)) {
   
   merplots <- plot_mer_facet(mer, group = paste0("Cluster", i))
   
-  ggsave(paste0('neurons/stats/neuron_clusterGLM/graphs/cluster_', i, '_MER_cell.count.png'),
+  ggsave(paste0('neurons/cluster_stats/neuron_clusterGLM/graphs/cluster_', i, '_MER_cell.count.png'),
          plot = merplots, width = 10, height = 5)
   
   write_csv(mer,
-            file = paste0('neurons/stats/neuron_clusterGLM/MER/cluster_', i, '_MERtable.csv'))
+            file = paste0('neurons/cluster_stats/neuron_clusterGLM/MER/cluster_', i, '_MERtable.csv'))
   
   dat.for.mod <- subset(dat.for.stats,
                         seurat_clusters == i) %>%
@@ -471,11 +471,11 @@ for (i in unique(dat.for.stats$seurat_clusters)) {
 
 
 write_csv(neuron.clusters.glm,
-          file = 'neurons/stats/neuron_clusterGLM/neuron_clusterGLM.csv')
+          file = 'neurons/cluster_stats/neuron_clusterGLM/neuron_clusterGLM.csv')
 write_csv(neuron.clusters.pairwise,
-          file = 'neurons/stats/neuron_clusterGLM/neuron_clusters_pairwise.csv')
+          file = 'neurons/cluster_stats/neuron_clusterGLM/neuron_clusters_pairwise.csv')
 write_csv(neuron.clusters.modglm,
-          file = 'neurons/stats/neuron_clusterGLM/neuron_clusters_modglm.csv')
+          file = 'neurons/cluster_stats/neuron_clusterGLM/neuron_clusters_modglm.csv')
 
 
 #### Neuron cluster distributions ####
@@ -576,11 +576,11 @@ p1 <- table_orig.idents_by_clusters %>%
                 vjust = -1),
             color = 'black', 
             size = 2.8) +
-  # scale_fill_manual(name = 'Cluster', values = custom_colors$discrete) +
   scale_y_continuous(name = 'Percentage [%]', 
                      labels = scales::percent_format(), expand = c(0.01,0)) +
   coord_cartesian(clip = 'off') +
   theme_bw() +
+  labs(fill = "Cluster") +
   theme(legend.position = 'left',
         plot.title = element_text(hjust = 0.5),
         text = element_text(size = 16),
@@ -621,6 +621,7 @@ p2 <- table_clusters_by_orig.idents %>%
                      expand = c(0.01,0)) +
   coord_cartesian(clip = 'off') +
   theme_bw() +
+  labs(fill = "Group") +
   theme(legend.position = 'right',
         plot.title = element_text(hjust = 0.5),
         text = element_text(size = 16),
@@ -666,6 +667,7 @@ p1 <- table_orig.idents_by_clusters %>%
                      labels = scales::comma, expand = c(0.01, 0)) +
   coord_cartesian(clip = 'off') +
   theme_bw() +
+  labs(fill = "Cluster") +
   theme(legend.position = 'left',
         plot.title = element_text(hjust = 0.5),
         text = element_text(size = 16),
@@ -692,6 +694,7 @@ p2 <- table_clusters_by_orig.idents %>%
   scale_y_continuous(labels = scales::comma, expand = c(0.01, 0)) +
   coord_cartesian(clip = 'off') +
   theme_bw() +
+  labs(fill = "Group") +
   theme(
     legend.position = 'right',
     plot.title = element_text(hjust = 0.5),
@@ -764,7 +767,7 @@ FindAllMarkers(MSCneurons.reclust,
 neuron.markers.df %>% 
   mutate(specificity = avg_log2FC*(pct.1/pct.2)) -> neuron.markers.df
 
-write_csv(neuron.markers.df, 'neurons/stats/neuron_clusterMarkers.csv')
+write_csv(neuron.markers.df, 'neurons/cluster_stats/neuron_clusterMarkers.csv')
 
 # heatmap of 6 top markers per cluster - reduce to top 6 genes per cluster
 neuron.markers.df %>% 
@@ -843,9 +846,9 @@ dge_data <- prep.for.DGE(l.dfs,
                          assay = 'integrated')
 
 # get results and graph p-values
-limma_results <- run_limmatrend(dge_data$results, "./neurons/stats/limma_trend")
+limma_results <- run_limmatrend(dge_data$results, "./neurons/cluster_stats/limma_trend")
 
-save(limma_results, file = "./neurons/stats/limma_trend/neuronCluster_limma_results.rda")
+save(limma_results, file = "./neurons/cluster_stats/limma_trend/neuronCluster_limma_results.rda")
 
 #### RRHO/RedRibbon ####
 setwd(paste0(root.dir, "/DGE_CellTypes/neurons"))
@@ -861,9 +864,9 @@ rrho_results <- get.RRHO(limma_results,
                          group.by = sex,
                          compare.across = status,
                          # new.max.log = max.log.scale,
-                         outdir = "./RRHO")
+                         outdir = "./cluster_stats/RRHO")
 
-save(rrho_results, file = "./RRHO/rrho_results.rda")
+save(rrho_results, file = "./cluster_stats/RRHO/rrho_results.rda")
 
 
 # graph gene counts in each RR quadrant
@@ -893,7 +896,7 @@ for (dataset_name in names(rrho_results)) {
   
   cat("Saving plot for", dataset_name, "\n")
   
-  ggsave(paste0('./RRHO/', dataset_name,
+  ggsave(paste0('./cluster_stats/RRHO/', dataset_name,
                 '/RR_quad_genes_count.png'),
          width = 7, height = 4)
 
