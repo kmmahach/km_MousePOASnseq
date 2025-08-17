@@ -65,64 +65,157 @@ DotPlot(int.ldfs,
         col.min = 0) +
   theme_classic()
 
-ggsave('neurons/neuropeptides/selectGenes_neurons.png',
+ggsave('neurons/selectGenes_neurons.png',
        height = 4, width = 9)
 
+#### Candidate neuroendocrine genes ####
+setwd(paste0(root.dir, "/DGE_CellTypes"))
 
-# counts per sample
-select_neur = full_join(full_join(int.ldfs@reductions$umap@cell.embeddings %>% 
-                                    as.data.frame() %>% 
-                                    rownames_to_column("Cell.id"),
-                                  int.ldfs@meta.data %>%
-                                    rownames_to_column("Cell.id")),
-                        int.ldfs@assays$SCT@data %>% 
-                          as.data.frame() %>% 
-                          filter(rownames(int.ldfs@assays$SCT@data) %in% select_genes) %>% 
-                          t() %>% as.data.frame() %>% 
-                          rownames_to_column('Cell.id'))
+# subset by select_genes
+sub.MSCneurons <- subset_by_gene(int.ldfs,
+                                 select_genes,
+                                 slot = "data",
+                                 min_count = 0.5)
 
+# get presence/absence (1/0) for select_genes
+umap = data.frame(int.ldfs@reductions$umap@cell.embeddings) %>%
+  rownames_to_column('Cell_ID')
 
-# graph counts
-# only want to count cells with read above 2
-select_neur.table = select_neur %>% 
-  dplyr::select(c(select_genes)) %>% 
-  as.matrix() %>% 
-  pmin(log(2)) 
+metadata = data.frame(int.ldfs@meta.data) %>%
+  full_join(umap, by = "Cell_ID")
 
+sapply(
+  names(sub.MSCneurons), \(sub_name) {
+    all_cells = metadata$Cell_ID
+    as.integer(all_cells %in% sub.MSCneurons[[sub_name]]@meta.data$Cell_ID)
+  }
+) %>%
+  as.data.frame() %>%
+  mutate(Cell_ID = metadata$Cell_ID) -> bin_df
 
-# set value to 1 if read above 2
-select_neur.table[select_neur.table > 0.5] <- 1
+select_neur = full_join(metadata, bin_df, by = "Cell_ID")
 
-# create count table
-select_neur.table = select_neur.table %>% 
-  as.data.frame() %>% 
-  mutate(All = 1) %>% 
-  colSums() %>% 
-  as.data.frame() %>% 
-  dplyr::rename(Counts = '.') %>% 
-  mutate(Total.neurons = max(Counts),
-         Percentage = 100*Counts/Total.neurons)
+# counts & percentages
+sum_neur_indiv <- select_neur %>%
+  group_by(orig.ident,
+           indiv_genotype) %>%
+  summarise(cell_count = n(),
+            across(all_of(names(sub.MSCneurons)),
+                   list(sum = ~ sum(.x),
+                        pct = ~ (sum(.x) / n()) * 100),
+                   .names = "{fn}_{.col}"),
+            .groups = "drop")
 
-# compare counts across samples
-# set expression to present/absent
-tmp = int.ldfs@assays$SCT@data %>% 
-  as.data.frame() %>% 
-  filter(rownames(int.ldfs@assays$SCT@data) %in% select_genes) %>% 
-  t() %>% 
-  pmin(log(2)) 
+# percent of neurons expr select genes by individual
+sum_neur_indiv %>%
+  pivot_longer(
+    cols = starts_with("pct_"),
+    names_to = "gene",
+    names_prefix = "pct_",
+    values_to = "percentage"
+  ) %>%
+  ggplot(aes(x = reorder(gene, -percentage),
+             y = percentage,
+             color = orig.ident)) +
+  geom_boxplot(width = 0,
+               position = position_dodge(0.75),
+               size = 1) +
+  geom_point(position = position_dodge(0.75),
+             aes(shape = indiv_genotype,
+                 group = orig.ident),
+             size = 2) +
+  theme_classic() +
+  scale_color_manual(values = c("#CC5500",
+                                "#FF6A00",
+                                "#0077CC",
+                                "#0095FF")) +
+  xlab('') + ylab('% of neurons') +
+  ggtitle('Percent nuclei expressing neur-endo genes')
 
-tmp[tmp > 0.5] <- 1
+ggsave('neurons/neuroendocrine_genes/pctNeurons_exprSelectGenes_by_indiv.png',
+       height = 5, width = 10)
 
-tmp = tmp %>% 
-  as.data.frame() %>% 
-  rownames_to_column('Cell.id')
+# percent of neurons expr select genes by group
+sum_neur_group <- select_neur %>%
+  group_by(orig.ident) %>%
+  summarise(cell_count = n(),
+            across(all_of(names(sub.MSCneurons)),
+                   list(sum = ~ sum(.x),
+                        pct = ~ (sum(.x) / n()) * 100),
+                   .names = "{fn}_{.col}"),
+            .groups = "drop")
 
-full_join(full_join(int.ldfs@reductions$umap@cell.embeddings %>% 
-                      as.data.frame() %>% 
-                      rownames_to_column("Cell.id"),
-                    int.ldfs@meta.data %>%
-                      rownames_to_column("Cell.id")), tmp) -> select_neur.table_orig.ident
-rm(tmp)
+sum_neur_group %>%
+  pivot_longer(
+    cols = starts_with("pct_"),
+    names_to = "gene",
+    names_prefix = "pct_",
+    values_to = "percentage"
+  ) %>%
+  ggplot(aes(x = reorder(gene, -percentage),
+             y = percentage,
+             color = orig.ident)) +
+  geom_point(size = 3) +
+  theme_classic() +
+  ggtitle('Percent nuclei expressing neur-endo genes')
+
+ggsave('neurons/neuroendocrine_genes/pctNeurons_exprSelectGenes_by_orig.ident.png',
+       height = 5, width = 10)
+
+# total - all groups combined
+sum_neur_group %>%
+  pivot_longer(
+    cols = starts_with("sum_"),
+    names_to = "gene",
+    names_prefix = "sum_",
+    values_to = "sum"
+  ) %>%
+  dplyr::select(orig.ident,
+                gene,
+                cell_count,
+                sum) %>%
+  group_by(gene) %>%
+  summarise(percentage = sum(sum)/sum(cell_count) * 100) %>%
+  filter(percentage < 99) %>%
+  mutate(percentage = signif(percentage, 2)) %>%
+  ggplot(aes(x = reorder(gene, -percentage),
+             y = percentage,
+             label = percentage)) +
+  geom_label() +
+  theme_classic() +
+  ggtitle('Select genes - neurons only')
+
+ggsave('neurons/neuroendocrine_genes/pctNeurons_exprSelectGenes_all.png',
+       height = 5, width = 7)
+
+# subset genes
+subset_genes <- c("Esr1",
+                  "Ar",
+                  "Pgr",
+                  "Nr3c1",
+                  "Nr3c2")
+# format data
+sum_neur_indiv %>%
+  pivot_longer(
+    cols = starts_with("sum_"),
+    names_to = "gene",
+    names_prefix = "sum_",
+    values_to = "counts"
+  ) %>%
+  dplyr::select(orig.ident,
+                indiv_genotype,
+                gene,
+                counts,
+                cell_count) %>%
+  mutate(sex =
+           ifelse(grepl("female", orig.ident),
+                  "Female",
+                  "Male")) %>%
+  mutate(status =
+           ifelse(grepl("dom", orig.ident),
+                  "Dom",
+                  "Sub")) -> dat.for.stats
+
 
 #### Neuroendocrine genes; neuron stats ####
 
@@ -170,7 +263,7 @@ select_neur.counts %>%
   xlab('') + ylab('% of neurons') +
   ggtitle('Percent nuclei expressing neur-endo genes')
 
-ggsave('neurons/neuropeptides/pctNeurons_exprSelectGenes_by.indiv_genotype.png',
+ggsave('neurons/neuroendocrine_genes/pctNeurons_exprSelectGenes_by.indiv_genotype.png',
        height = 5, width = 5)
 
 # GLM (binom) on cluster proportions
@@ -230,7 +323,7 @@ for (i in unique(select_neur.counts$Genes)) {
     theme_classic() +
     ggtitle(paste0("Genes ", i,": binomial GLM cell count"))
   
-  ggsave(paste0('neurons/neuropeptides/', i, '_binomialGLM_cell.count.png'),
+  ggsave(paste0('neurons/neuroendocrine_genes/', i, '_binomialGLM_cell.count.png'),
          width = 6, height = 5)
   
   # Tukey for all pairwise comparisons
@@ -284,97 +377,6 @@ neuron.genes.glm = neuron.genes.glm %>%
 write_csv(neuron.genes.glm,
           file = 'neurons/stats/neuron_selectGenesGLM.csv')
 
-#### graph select neur-endo genes ####
-
-select_neur.table %>% 
-  rownames_to_column('Genes') %>% 
-  filter(Percentage < 99) %>% 
-  mutate(Percentage = signif(Percentage, 2)) %>% 
-  ggplot(aes(x = reorder(Genes, -Percentage),
-             y = Percentage,
-             label = Percentage)) +
-  geom_label() +
-  theme_classic() +
-  ggtitle('Select genes - neurons only')
-
-ggsave('neurons/neuropeptides/pctNeurons_exprSelectGenes_all.png',
-       height = 5, width = 7)
-
-
-# graph table 
-select_neur.table_orig.ident %>% 
-  mutate(All = 1) %>% 
-  group_by(orig.ident) %>% 
-  summarise_at(c(select_genes, 'All'),
-               sum) %>% 
-  pivot_longer(cols = c(select_genes, 'All'),
-               names_to = 'Genes',
-               values_to = 'Counts') %>% 
-  group_by(orig.ident) %>% 
-  mutate(Total.count = max(Counts)) %>% 
-  ungroup() %>% 
-  mutate(Percentage = round(100*Counts/Total.count, 2)) %>% 
-  filter(Genes != 'All') %>% 
-  ggplot(aes(x = reorder(Genes, -Percentage),
-             y= Percentage,
-             color = orig.ident)) +
-  geom_point() + 
-  theme_classic()
-
-ggsave('neurons/neuropeptides/pctNeurons_exprSelectGenes_by_orig.ident.png',
-       height = 5, width = 9)
-
-# reduced gene subset
-select_neur.table_orig.ident %>% 
-  mutate(All = 1) %>% 
-  group_by(orig.ident) %>% 
-  summarise_at(c(select_genes, 'All'),
-               sum) %>% 
-  pivot_longer(cols = c(select_genes, 'All'),
-               names_to = 'Genes',
-               values_to = 'Counts') %>% 
-  group_by(orig.ident) %>% 
-  mutate(Total.count = max(Counts)) %>% 
-  ungroup() %>% 
-  mutate(Percentage = round(100*Counts/Total.count, 2)) %>% 
-  filter(Genes != 'All') %>% 
-  filter(Percentage >= 5) %>% 
-  ggplot(aes(x = reorder(Genes, -Percentage),
-             y = Percentage,
-             color = orig.ident)) +
-  geom_point() +
-  theme_classic()
-
-ggsave('neurons/neuropeptides/pctNeurons_exprSelectGenes_by_orig.ident_filtered.png',
-       height = 5, width = 9)
-
-# reduced subset again
-select_neur.table_orig.ident %>% 
-  mutate(All = 1) %>% 
-  group_by(orig.ident) %>% 
-  summarise_at(c(subset_genes,
-                 'All'),
-               sum) %>% 
-  pivot_longer(cols = c(subset_genes, 'All'),
-               names_to = 'Genes',
-               values_to = 'Counts') %>% 
-  group_by(orig.ident) %>% 
-  mutate(Total.count = max(Counts)) %>% 
-  ungroup() %>% 
-  mutate(Percentage = round(100*Counts/Total.count,
-                            2)) %>% 
-  filter(Genes != 'All') %>% 
-  filter(Percentage >= 5) %>% 
-  ggplot(aes(x = reorder(Genes,
-                         -Percentage),
-             y= Percentage,
-             color = orig.ident)) +
-  geom_point() +
-  theme_classic()
-
-ggsave('neurons/neuropeptides/pctNeurons_exprSubset_SelectGenes_by_orig.ident_filtered.png',
-       height = 5, width = 9)
-
 
 #### DGE with limma ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
@@ -396,7 +398,7 @@ subset_genes <- c("Esr1",
                   "Nr3c1",
                   "Nr3c2")
 
-l.dfs <- subset_by_gene(int.ldfs, subset_genes, min_count = 2)
+l.dfs <- subset_by_gene(int.ldfs, subset_genes, min_count = 0.5)
 
 
 # raw counts and norm.counts of variable genes
@@ -414,10 +416,9 @@ dge_data <- prep.for.DGE(l.dfs,
 
 
 # get results and graph p-values
-# may want to filter to top 500 most variable genes? 
-limma_results <- run_limmatrend(dge_data$results, "./neurons/neuropeptides/limma_trend")
+limma_results <- run_limmatrend(dge_data$results, "./neurons/neuroendocrine_genes/limma_trend")
 
-  save(limma_results, file = "./neurons/neuropeptides/limma_trend/limma_results.rda")
+  save(limma_results, file = "./neurons/neuroendocrine_genes/limma_trend/limma_results.rda")
 
   
 #### RRHO/RedRibbon ####
@@ -431,6 +432,6 @@ rrho_results <- get.RRHO(limma_results,
                          group.by = sex,
                          compare.across = status,
                          new.max.log = max.log.scale,
-                         outdir = "./neurons/neuropeptides/RRHO")
+                         outdir = "./neurons/neuroendocrine_genes/RRHO")
 
-  save(rrho_results, file = "./neurons/neuropeptides/RRHO/rrho_results.rda")
+  save(rrho_results, file = "./neurons/neuroendocrine_genes/RRHO/rrho_results.rda")

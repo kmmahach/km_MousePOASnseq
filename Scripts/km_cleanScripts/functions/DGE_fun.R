@@ -180,6 +180,37 @@ melt.matrix <- function (data,
   return(melted_dt)
 }
 
+# Function to plot MERs faceted by predictor
+plot_mer_facet <- function(mer_df, group) {
+  
+  p_est <- ggplot(mer_df, aes(x = interaction(Sex, Status), y = estimate, color = Status, shape = Sex)) +
+    geom_point(position = position_dodge(width = 0.5), size = 3) +
+    geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+                  width = 0.2,
+                  position = position_dodge(width = 0.5)) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    facet_wrap(~ term, scales = "free_x") +
+    labs(
+      x = "Sex × Status",
+      y = "Marginal Effect (MER)",
+      title = paste0("MER: Cluster ", group)
+    ) +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  p_pred <- ggplot(mer, aes(x = interaction(Sex, Status), y = predicted, color = Status, shape = Sex)) +
+    geom_point(position = position_dodge(width = 0.5), size = 3) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    labs(y = "Predicted Neuron Proportion", x = "Sex × Status",
+         title = paste0("Predicted values: Cluster ", group)) +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  return(grid.arrange(p_est, p_pred,
+                      widths = c(1, 0.5),
+                      nrow = 1))
+}
+
 #### processing for DGE/RRHO ####
 prep.for.DGE <- function(list_of_SeuratObj,
                          assay = 'integrated',
@@ -425,6 +456,7 @@ run_limmatrend <- function(prep_results_list,
   return(results_list)
 }
 
+# set colors to same scale for all plots
 ggRedRibbon.rrho.scale <- function (self, 
                                     n = NULL, 
                                     labels = c("a", "b"), 
@@ -569,45 +601,110 @@ ggRedRibbon.rrho.scale <- function (self,
   return(gg)
 }
 
+# invert quadrants to match pattern: upup = top right, downdown = bottom left
+RRHO2_heatmap_axis.flip <- function (RRHO_obj, 
+                                     maximum = NULL, 
+                                     minimum = NULL, 
+                                     colorGradient = NULL, 
+                                     labels = NULL, 
+                                     ...) {
+  hypermat <- RRHO_obj$hypermat
+  method <- RRHO_obj$method
+  if (is.null(labels)) {
+    labels <- RRHO_obj$labels
+  }
+  if (!is.null(maximum)) {
+    hypermat[hypermat > maximum] <- maximum
+  }
+  else {
+    maximum <- max(hypermat, na.rm = TRUE)
+  }
+  if (!is.null(minimum)) {
+    hypermat[hypermat < minimum] <- minimum
+  }
+  else {
+    minimum <- min(hypermat, na.rm = TRUE)
+  }
+  if (minimum > maximum) {
+    stop("minimum > maximum, please check these function arguments!")
+  }
+  color.bar <- function(lut, min, max = -min, nticks = 11, 
+                        ticks = seq(min, max, len = nticks), title = "") {
+    scale <- (length(lut) - 1)/(max - min)
+    plot(c(0, 10), c(min, max), type = "n", bty = "n", xaxt = "n", 
+         xlab = "", yaxt = "n", ylab = "")
+    mtext(title, 2, 2.3, cex = 0.8)
+    axis(2, round(ticks, 0), las = 1, cex.lab = 0.8)
+    for (i in 1:(length(lut) - 1)) {
+      y <- (i - 1)/scale + min
+      rect(0, y, 10, y + 1/scale, col = lut[i], border = NA)
+    }
+  }
+  if (is.null(colorGradient)) {
+    jet.colors <- colorRampPalette(c("#00007F", "blue", "#007FFF", 
+                                     "cyan", "#7FFF7F", "yellow", "#FF7F00", "red", "#7F0000"))
+    colorGradient <- jet.colors(101)
+  }
+  layout(matrix(c(rep(1, 6), 2), 1, 7, byrow = TRUE))
+  breaks <- seq(minimum, maximum, length.out = length(colorGradient) + 
+                  1)
+  image(hypermat[nrow(hypermat):1, ncol(hypermat):1], # flip the axes to match RedRibbon plots
+        col = colorGradient, breaks = breaks, axes = FALSE, 
+        ...)
+  if (!is.null(labels)) {
+    mtext(labels[2], 2, 0.5)
+    mtext(labels[1], 1, 0.5)
+  }
+  if (method == "hyper") {
+    atitle <- ifelse(RRHO_obj$log10.ind, "-log10(P-value)", 
+                     "-log(P-value)")
+    color.bar(colorGradient, min = minimum, max = maximum, 
+              nticks = 6, title = atitle)
+  }
+  else if (method == "fisher") {
+    atitle <- "log Odds"
+    color.bar(colorGradient, min = minimum, max = maximum, 
+              nticks = 6, title = atitle)
+  }
+  else {
+    stop("internal error (1), please report this error to https://github.com/RRHO2/RRHO2/issues")
+  }
+  invisible(hypermat)
+}
+
 
 get.RRHO <- function(results_list,
                      compare.across,
                      group.by,
-                     new.max.log,
+                     new.max.log = NULL,
                      outdir = "./RRHO") {
   
   rrho_results <- list()
   
   filter_comparisons <- \(x) {
-    
     clean_names <- sub("^tt", "", names(x)[grepl("^tt", names(x))])
+    
     compare.across.values <- compare.across
     group.by.values <- group.by
     
-    
     # split into before vs after
     parts <- strsplit(clean_names, "_vs_")
-    
     keep <- vapply(parts, function(x) {
       left  <- unlist(strsplit(x[1], "_"))
       right <- unlist(strsplit(x[2], "_"))
-      
       # extract the compare.across and group.by values from each side
       left_compare  <- left[left %in% compare.across.values]
       right_compare <- right[right %in% compare.across.values]
-
       left_group  <- left[left %in% group.by.values]
       right_group <- right[right %in% group.by.values]
-      
       # comparisons where compare.across values are different, AND group.by values are the same
       length(left_compare)  == 1 &&
         length(right_compare) == 1 &&
-        left_compare != right_compare &&  
+        left_compare != right_compare &&
         length(left_group)  == 1 &&
         length(right_group) == 1 &&
-        left_group == right_group     
+        left_group == right_group
     }, logical(1))
-    
     clean_names[keep]
   }
   
@@ -615,7 +712,7 @@ get.RRHO <- function(results_list,
   
   for (dataset_name in names(results_list)) {
     dataset <- results_list[[dataset_name]]
-    comps <- comparisons[[dataset_name]] 
+    comps <- comparisons[[dataset_name]]
     
     # skip datasets with no comparisons
     if (length(comps) < 2) next
@@ -630,11 +727,18 @@ get.RRHO <- function(results_list,
     right_df_raw <- right_df_raw[common_genes, ]
     
     # flip signs if compare.across order differs
-    left_compare_val <- strsplit(comps[1], "_vs_")[[1]][1]  # first part
-    if (left_compare_val != compare.across[1]) {
-      left_sign <- -1
-    } else {
+    left_compare_valUP <- strsplit(comps[1], "_vs_")[[1]][1]  # first part
+    right_compare_valUP <- strsplit(comps[2], "_vs_")[[1]][1]
+    
+    if (grepl(compare.across[1], left_compare_valUP)) {
       left_sign <- 1
+    } else {
+      left_sign <- -1
+    }
+    if (grepl(compare.across[1], right_compare_valUP)) {
+      right_sign <- 1
+    } else {
+      right_sign <- -1
     }
     
     left_df  <- data.frame(gene = rownames(left_df_raw),
@@ -642,21 +746,21 @@ get.RRHO <- function(results_list,
                            stringsAsFactors = FALSE)
     
     right_df <- data.frame(gene = rownames(right_df_raw),
-                           value = -log10(right_df_raw$P.Value) * sign(right_df_raw$t) * left_sign,
+                           value = -log10(right_df_raw$P.Value) * sign(right_df_raw$t) * right_sign,
                            stringsAsFactors = FALSE)
     
-    
-    
     # create RRHO2 object
-    rrho_obj <- RRHO2_initialize(left_df, right_df, boundary = 0.05,
+    rrho_obj <- RRHO2_initialize(right_df, left_df, log10.ind = TRUE,
                                  labels = c(comps[1], comps[2]))
     
     # Now create df for RedRibbon
     # needs to have an id (gene) col and one called 'a' and one called 'b'
-    df <- left_df %>% 
-      dplyr::rename('a' = value) %>% 
-      full_join(right_df %>% 
-                  dplyr::rename('b' = value), 
+    df <- right_df %>%
+      dplyr::select(gene, value) %>%
+      dplyr::rename('a' = value) %>%
+      full_join(left_df %>%
+                  dplyr::select(gene, value) %>%
+                  dplyr::rename('b' = value),
                 by = 'gene')
     
     # Create RedRibbon object
@@ -664,28 +768,42 @@ get.RRHO <- function(results_list,
     
     # Run the overlap using evolutionary algorithm,
     # computing permutation adjusted p-value for the four quadrants
-      
     RedRibbon.quads <- quadrants(rr,
                                  algorithm = "ea",
                                  permutation = TRUE,
                                  whole = FALSE)
     
     # store rrho object and RedRibbon.quads in output list
-    rrho_results[[dataset_name]] <- append(rrho_obj, 
+    rrho_results[[dataset_name]] <- append(rrho_obj,
                                            as_named_list(RedRibbon.quads, df))
     
     # RedRibbon plot
-    p1 <- ggRedRibbon.rrho.scale(rr, 
-                                 quadrants = RedRibbon.quads,
-                                 new.max.log = new.max.log) + 
-      coord_fixed(ratio = 1, 
-                  clip = "off") +
-      xlab(gsub("_", " ", comps[1])) +
-      ylab(gsub("_", " ", comps[2])) +
-      ggtitle(dataset_name) +
-      theme(plot.title = element_text(size = 25,
-                                      face = "bold"),
-            plot.margin = unit(c(0,0.5,0,0.5), units = "cm")) # top, right, bottom, left
+    if(!is.null(new.max.log)) {
+      p1 <- ggRedRibbon.rrho.scale(rr,
+                                   quadrants = RedRibbon.quads,
+                                   new.max.log = new.max.log) +
+        coord_fixed(ratio = 1,
+                    clip = "off") +
+        xlab(gsub("_", " ", comps[1])) +
+        ylab(gsub("_", " ", comps[2])) +
+        ggtitle(dataset_name) +
+        theme(plot.title = element_text(size = 25,
+                                        face = "bold"),
+              plot.margin = unit(c(0,0.5,0,0.5), units = "cm")) # top, right, bottom, left
+      
+    } else {
+      
+      p1 <- ggRedRibbon(rr, 
+                        quadrants = RedRibbon.quads) +
+        coord_fixed(ratio = 1,
+                    clip = "off") +
+          xlab(gsub("_", " ", comps[1])) +
+          ylab(gsub("_", " ", comps[2])) +
+          ggtitle(dataset_name) +
+          theme(plot.title = element_text(size = 25,
+                                          face = "bold"),
+                plot.margin = unit(c(0,0.5,0,0.5), units = "cm")) # top, right, bottom, left
+    }
     
     # Save plots
     out_dir <- file.path(outdir, dataset_name)
@@ -693,22 +811,20 @@ get.RRHO <- function(results_list,
     if(!dir.exists(out_dir)) {
       dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
     }
-
-    ggsave(file.path(out_dir, paste0("RedRibbon_scaled_concordance_by_", deparse(substitute(group.by)), ".png")),
-           plot = p1, height = 10, width = 10, dpi = 300)
     
+    ggsave(file.path(out_dir, paste0("RedRibbon_concordance_by_", deparse(substitute(group.by)), ".png")),
+           plot = p1, height = 10, width = 10, dpi = 300)
     
     png(file.path(out_dir, paste0("RRHO2_concordance_by_", deparse(substitute(group.by)), ".png")),
         height = 10, width = 10, units = "in", res = 300)
-    plot.new()
-    RRHO2_heatmap(rrho_obj)
-    dev.off()
 
+    plot.new()
+    RRHO2_heatmap_axis.flip(rrho_obj)
+    dev.off()
+    
     cat("saving plots for subset:", dataset_name, "\n")
   }
-  
- return(rrho_results) 
-  
+  return(rrho_results)
 }
 
 # create list of RRHO outcomes and deal with empty quadrants for graphing

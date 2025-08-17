@@ -11,7 +11,8 @@ setwd(root.dir)
 source("./Scripts/km_cleanScripts/functions/DGE_fun.R")
 
 # libraries (save dependencies and package versions)
-load_packages(c("tidyverse", "Seurat", "limma", "edgeR", "RedRibbon", "RRHO2"), 
+load_packages(c("tidyverse", "Seurat", "limma", "edgeR", "RedRibbon", "RRHO2", "marginaleffects",
+                 "modglm", "emmeans", "multcomp", "gridExtra", "gghalves", "patchwork"), 
               out_prefix = "03", folder = "./Scripts/km_cleanScripts")
 
 #### load data ####
@@ -49,11 +50,11 @@ Idents(object = MSCneurons.reclust) <- "seurat_clusters"
 # UMAPs - all neuron clusters
 MSCneurons.reclust %>%
   DimPlot(label = TRUE) +
-  theme_classic() + 
+  theme_classic() +
   ggtitle('neuron.seurat.clusters')
 
 ggsave('./neurons/UMAP/neurons.recluster.clusters.png',
-       height = 10, width = 12)
+       height = 5, width = 6)
 
 # broad cell types
 MSCneurons.reclust %>%
@@ -61,9 +62,9 @@ MSCneurons.reclust %>%
   theme_classic()
 
 ggsave('./neurons/UMAP/neurons.recluster.parent_id.broad.png',
-       height = 10, width = 12)
+       height = 5, width = 6)
 
-# sex/social status 
+# sex/social status
 MSCneurons.reclust %>%
   DimPlot(group.by = 'orig.ident',
           size = 3) +
@@ -74,7 +75,7 @@ MSCneurons.reclust %>%
                                 'green'))
 
 ggsave('./neurons/UMAP/neurons.recluster.orig.ident.png',
-       height = 10, width = 12)
+       height = 5, width = 7)
 
 # social status
 MSCneurons.reclust %>%
@@ -87,7 +88,7 @@ MSCneurons.reclust %>%
                                 'red'))
 
 ggsave('./neurons/UMAP/neurons.recluster.status.png',
-       height = 10, width = 12)
+       height = 5, width = 7)
 
 # indiv_genotype (predicted by souporcell) for each group
 # set idents
@@ -95,23 +96,21 @@ Idents(MSCneurons.reclust) = "orig.ident"
 subset_idents <- unique(Idents(MSCneurons.reclust))
 
 # subset Seurat obj
-reclust <- subset_by_ident(MSCneurons.reclust, 
+reclust <- subset_by_ident(MSCneurons.reclust,
                            subset_idents = subset_idents,
                            cluster = FALSE)
 
 lapply(reclust, \(x) {
-  x %>% 
+  x %>%
     DimPlot(group.by = 'indiv_genotype') +
     theme_classic() +
     ggtitle(paste0(x@project.name, ' - indiv_genotype'))
-  
-  ggsave(paste0('./neurons/UMAP/', 
-         sub("\\.data$", "", x@project.name), 
-         '_neurons.recluster_genotypes.png'),
-         height = 5, width = 6) 
+  ggsave(paste0('./neurons/UMAP/',
+                sub("\\.data$", "", x@project.name),
+                '_neurons.recluster_genotypes.png'),
+         height = 5, width = 6)
   }
 )
-
 
 # dom candidate genes?
 DotPlot(MSCneurons.reclust,
@@ -122,27 +121,61 @@ ggsave('./neurons/dom.genes.dotplot.png',
        height = 5, width = 5)
 
 # scaled counts of neurons in each cluster (as percent)
-# scale
-MSCneurons.reclust@meta.data %>%
-  dplyr::select(c(orig.ident, indiv_genotype)) %>% 
-  table() %>%
-  as.data.frame() %>% 
-  dplyr::rename(total.neuron.count = Freq) -> neuron.genotype.scale
+# subset by select_clusters
+Idents(MSCneurons.reclust) <- "seurat_clusters"
+select_clusters <- unique(MSCneurons.reclust$seurat_clusters)
 
-# cluster counts
-MSCneurons.reclust@meta.data %>%
-  dplyr::select(c(orig.ident, seurat_clusters, indiv_genotype)) %>% 
-  table() %>%
-  as.data.frame() -> neuron.cluster.genotype.count
+sub.MSCneurons <- subset_by_ident(MSCneurons.reclust,
+                                  select_clusters,
+                                  cluster = TRUE)
 
-# combine counts and scale
-neuron.cluster.genotype.count %>% 
-  full_join(neuron.genotype.scale) %>% 
-  mutate(Percent = 100*Freq/total.neuron.count) -> neuron.cluster.genotype.count
+# get presence/absence (1/0) for clusters
+umap = data.frame(MSCneurons.reclust@reductions$umap@cell.embeddings) %>%
+  rownames_to_column('Cell_ID')
 
-# graph
-neuron.cluster.genotype.count %>%
-  ggplot(aes(x = seurat_clusters,
+metadata = data.frame(MSCneurons.reclust@meta.data) %>%
+  full_join(umap, by = "Cell_ID")
+
+sapply(
+  names(sub.MSCneurons), \(sub_name) {
+    all_cells = metadata$Cell_ID
+    as.integer(all_cells %in% sub.MSCneurons[[sub_name]]@meta.data$Cell_ID)
+  }
+) %>%
+  as.data.frame() %>%
+  mutate(Cell_ID = metadata$Cell_ID) -> bin_df
+
+select_neur = full_join(metadata, bin_df, by = "Cell_ID")
+
+# counts & percentages
+sum_neur_indiv <- select_neur %>%
+  group_by(orig.ident,
+           indiv_genotype) %>%
+  summarise(total.neuron.count = n(),
+            across(all_of(names(sub.MSCneurons)),
+                   list(Freq = ~ sum(.x),
+                        Percent = ~ (sum(.x) / n()) * 100),
+                   .names = "{fn}_{.col}"),
+            .groups = "drop")
+
+# percent of neurons expr select genes by individual
+sum_neur_indiv %>%
+  pivot_longer(
+    cols = starts_with("Percent_"),
+    names_to = "seurat_clusters",
+    names_prefix = "Percent_",
+    values_to = "Percent"
+  ) %>% 
+  dplyr::select(orig.ident,
+                indiv_genotype,
+                seurat_clusters,
+                total.neuron.count,
+                Percent) %>% 
+  mutate(seurat_clusters = str_remove(seurat_clusters, 
+                                      "cluster_") %>% 
+           as.numeric()) %>% 
+  ggplot(aes(x = reorder(as.integer(seurat_clusters),
+                         as.numeric(seurat_clusters)),
              y = Percent,
              color = orig.ident)) +
   geom_boxplot(width = 0,
@@ -184,26 +217,46 @@ ggsave('./neurons/clustersVorig.ident.neurons.recluster.genotype.scaled.png',
 #### Prep for stats ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
 
-# get cluster names? 
-MSCneurons.reclust@meta.data %>%
+# get cluster names?
+select_neur %>%
   dplyr::select(parent_id.exp.prob,
-         parent_id.broad.prob,
-         seurat_clusters)  %>% 
-  table() %>% 
-  as.data.frame() %>% 
-  filter(Freq != 0) %>% 
-  group_by(seurat_clusters) %>% 
-  mutate(total = sum(Freq)) %>% 
-  ungroup() %>% 
+                parent_id.broad.prob,
+                seurat_clusters)  %>%
+  table() %>%
+  as.data.frame() %>%
+  filter(Freq != 0) %>%
+  group_by(seurat_clusters) %>%
+  mutate(total = sum(Freq)) %>%
+  ungroup() %>%
   mutate(Percent = 100*Freq/total) -> neuron.cluster.names
 
 # save neuron cluster names
 write_csv(neuron.cluster.names, 'neurons/stats/neuron_clusterNames.csv')
 
-# add variable for status and sex
-neuron.cluster.genotype.count %>% 
-  mutate(Sex = ifelse(grepl("female", orig.ident), "female", "male")) %>% 
-  mutate(Status = ifelse(grepl("dom", orig.ident), "dom", "sub")) -> neuron.cluster.genotype.count
+# format data
+sum_neur_indiv %>%
+  pivot_longer(
+    cols = matches("^(Percent|Freq)_"),
+    names_to = c(".value", "seurat_clusters"),
+    names_pattern = "(Percent|Freq)_(.*)"
+  ) %>%
+  dplyr::select(orig.ident,
+                indiv_genotype,
+                seurat_clusters,
+                Freq,
+                total.neuron.count,
+                Percent) %>% 
+  mutate(seurat_clusters = str_remove(seurat_clusters, 
+                                      "cluster_") %>% 
+           as.numeric()) %>% 
+  mutate(Sex =
+           ifelse(grepl("female", orig.ident),
+                  "Female",
+                  "Male")) %>%
+  mutate(Status =
+           ifelse(grepl("dom", orig.ident),
+                  "Dom",
+                  "Sub")) -> dat.for.stats
 
 #### ANOVA ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
@@ -211,22 +264,26 @@ setwd(paste0(root.dir, "/DGE_CellTypes"))
 ### run anova on every cluster
 # create empty data frame
 neuron.cluster.aov = data.frame(matrix(ncol = 6, nrow = 0))
-
 # provide column names
-colnames(neuron.cluster.aov) <- c("Df", "Sum Sq", "Mean Sq", "F value", "Pr(>F)", "seurat_clusters")
-
+colnames(neuron.cluster.aov) <- c("Df",
+                                  "Sum Sq",
+                                  "Mean Sq",
+                                  "F value",
+                                  "Pr(>F)",
+                                  "seurat_clusters")
 ## loop through each cluster
-for (i in unique(neuron.cluster.genotype.count$seurat_clusters)) {
+for (i in unique(dat.for.stats$seurat_clusters)) {
+  
   ## run two way anova on sex and status
   tmp <- aov(Percent ~ Sex*Status,
-             data = neuron.cluster.genotype.count %>%
-                    filter(seurat_clusters == i))
-
+             data = dat.for.stats %>%
+               filter(seurat_clusters == i))
+  
   # get results
   tmp2 = summary(tmp)[[1]] %>%
     as.data.frame() %>%
     mutate(seurat_clusters = i)
-
+  
   # combine in data frame
   neuron.cluster.aov = neuron.cluster.aov %>%
     rbind(tmp2)
@@ -235,152 +292,191 @@ for (i in unique(neuron.cluster.genotype.count$seurat_clusters)) {
 # drop residuals
 neuron.cluster.aov <- na.omit(neuron.cluster.aov)
 
-## adjust pvalue (FDR)
+# adjust pvalue (FDR)
 neuron.cluster.aov %>%
   mutate(p_adj = p.adjust(`Pr(>F)`,
                           method = 'fdr',
-                          n = nrow(neuron.cluster.aov))) %>% 
-  rownames_to_column('Type') -> neuron.cluster.aov
+                          n = nrow(neuron.cluster.aov))) %>%
+  rownames_to_column('term') -> neuron.cluster.aov
 
 # clean up
 neuron.cluster.aov %>%
-  mutate(Comp.type = case_when(grepl("Sex", Type) ~ "Sex",
-                               grepl("Status", Type) ~ "Status")) %>%
-  mutate(Comp.type = ifelse(grepl("Sex:Status", Type), 
-                            "Sex:Status", Comp.type)) -> neuron.cluster.aov
+  mutate(Predictor = case_when(grepl("Sex", term) ~ "Sex",
+                               grepl("Status", term) ~ "Status")) %>%
+  mutate(Predictor = ifelse(grepl("Sex:Status", term),
+                            "Sex:Status", Predictor)) %>%
+  dplyr::select(!(c(term, Df))) -> neuron.cluster.aov
+
+neuron.cluster.aov <- neuron.cluster.aov[order(neuron.cluster.aov$seurat_clusters),]
 
 
-## save anova table
+# save anova table
 write_csv(neuron.cluster.aov, 'neurons/stats/neuron_clusterANOVA.csv')
+
 
 #### GLM binomial ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
 
-### run glm on every cluster
-## use with proportion data
-# create empty data frame
-neuron.cluster.glm = data.frame(matrix(ncol = 7, nrow = 0))
+# GLM on neuron proportions
+neuron.clusters.glm <- data.frame()
+neuron.clusters.pairwise <- data.frame()
+neuron.clusters.modglm <- data.frame()
 
-#provide column names
-colnames(neuron.cluster.glm) <- c("contrast",
-                                  "Estimate",
-                                  "Std.error",
-                                  "z.value",
-                                  "adj.pvalue",
-                                  "z.ratio",
-                                  "seurat_clusters")
-## loop through each cluster
-for (i in unique(neuron.cluster.genotype.count$seurat_clusters)) {
+for (i in unique(dat.for.stats$seurat_clusters)) {
   
-  ## run interaction binomial GLM on sex and status
-  tmp = glm(cbind(Freq, Others) ~ Sex*Status, 
-            data = neuron.cluster.genotype.count %>% 
-              filter(seurat_clusters == i) %>% 
-              mutate(Others = total.neuron.count - Freq,
-                     Sex = as.factor(Sex),
-                     Status = as.factor(Status)), 
+  # binomial GLM on sex and status w/ interaction term
+  tmp = glm(cbind(Freq,
+                  total.neuron.count - Freq) ~ Sex*Status,
+            data = subset(dat.for.stats,
+                          seurat_clusters == i),
             family = binomial)
   
   # multivariate t distribution to correct for multiple testing
   tmp.res = summary(glht(tmp))
+  data.frame(Estimate = tmp.res$test$coefficients,
+             Std.error = tmp.res$test$sigma,
+             z.value = tmp.res$test$tstat,
+             p.value = tmp.res$test$pvalues) %>%
+    rownames_to_column('Predictor') %>%
+    mutate(neuron.clusters = i) -> tmp.res.df
   
-  # save results
-  tmp.res.df = data.frame(Estimate = tmp.res$test$coefficients,
-                          Std.error = tmp.res$test$sigma,
-                          z.value = tmp.res$test$tstat,
-                          adj.pvalue = tmp.res$test$pvalues,
-                          z.ratio = NA) %>% 
-    rownames_to_column('contrast') %>% 
-    mutate(seurat_clusters = i)
+  # FDR correction for all comparisons
+  tmp.res.df %>%
+    filter(Predictor != "(Intercept)") %>%
+    mutate(p.adjust.fdr =
+             round(p.adjust(p.value,
+                            method = 'fdr'),
+                   digits = 4) ) -> neuron.clusters.glm.fdr
   
-  # graph confidence intervals
   # get confidence intervals
   ci_out <- confint(tmp.res)
-  ci_df <- as.data.frame(ci_out$confint)
-  ci_df$group <- row.names(ci_df)
-  
+  ci_df <- as.data.frame(ci_out$confint) %>%
+    mutate(Predictor = row.names(.)) %>%
+    filter(!Predictor == "(Intercept)")
+  neuron.clusters.glm.fdr %>%
+    full_join(ci_df, by = c("Predictor",
+                            "Estimate")) -> neuron.clusters.glm.fdr
   # graph results
-  ci_df %>% 
-    filter(group != "(Intercept)") %>% 
-    ggplot(aes(x = Estimate, 
-               y = group)) +
+  ci_df %>%
+    ggplot(aes(x = Estimate,
+               y = Predictor)) +
     geom_point() +
-    geom_errorbar(aes(xmin = lwr, 
-                      xmax = upr), 
+    geom_errorbar(aes(xmin = lwr,
+                      xmax = upr),
                   width = 0.2) +
-    geom_vline(xintercept = 0, 
+    geom_vline(xintercept = 0,
                linetype = 2) +
-    labs(x = "Difference in Means", 
+    labs(x = "Difference in Means",
          y = "Comparison") +
     theme_classic() +
-    ggtitle(paste0("Neuron cluster ", i, ": binomial GLM cell count"))
+    ggtitle(paste0("Cluster", i," neurons: binomial GLM"))
   
-  ggsave(paste0('neurons/stats/neuron_clusterGLM/graphs/cluster', i,'_binomial.GLM.cell.count.png'),
-         width = 10, height = 6)
+  ggsave(paste0('neurons/stats/neuron_clusterGLM/graphs/cluster_', i, '_binomGLM_cell.count.png'),
+         width = 6, height = 5)
   
-  message(paste0("saving cell count differences for cluster ", i))
+  # Average marginal effects (AMEs)
+  ame <- slopes(tmp) %>%
+    as.data.frame() %>%
+    mutate(neuron.clusters = i,
+           EffectType = "AME")
   
-  ## run all pairwise comparison
-  # Tukey needed for all pairwise comparisons
-  tmp2 = glm(cbind(Freq, Others) ~ orig.ident, 
-             data = neuron.cluster.genotype.count %>% 
-               filter(seurat_clusters == i) %>% 
-               mutate(Others = total.neuron.count - Freq,
-                      Sex = as.factor(Sex),
-                      Status = as.factor(Status)), 
+  # Marginal effects at representative values (MERs)
+  mer <- slopes(tmp, type = "response") %>%
+    as.data.frame() %>%
+    mutate(neuron.clusters = i,
+           EffectType = "MER") %>%
+    dplyr::select(!c(rowid,
+                     predicted_lo,
+                     predicted_hi)) %>%
+    distinct()
+  
+  merplots <- plot_mer_facet(mer, group = i)
+  
+  ggsave(paste0('neurons/stats/neuron_clusterGLM/graphs/cluster_', i, '_MER_cell.count.png'),
+         plot = merplots, width = 10, height = 5)
+  
+  write_csv(mer,
+            file = paste0('neurons/stats/neuron_clusterGLM/MER/cluster_', i, '_MERtable.csv'))
+  
+  dat.for.mod <- subset(dat.for.stats,
+                        seurat_clusters == i) %>%
+    mutate(Sex = ifelse(Sex=="Female", 1, 0),
+           Status = ifelse(Status=="Dom", 1, 0)) %>%
+    dplyr::select(Freq, total.neuron.count, Sex, Status)
+  
+  tmp.for.mod <- glm(cbind(Freq,
+                           total.neuron.count - Freq) ~ Sex*Status,
+                     data = dat.for.mod,
+                     family = binomial)
+  
+  # modglm interaction effects
+  ints <- modglm(model = tmp.for.mod,
+                 vars = c("Sex", "Status"),
+                 data = dat.for.mod,
+                 hyps = "means",
+                 type = "dd")
+  
+  # Average interaction effect (AIE)
+  aie_df <- data.frame(neuron.clusters = i,
+                       EffectType = "AIE",
+                       term = "Sex:Status",
+                       Estimate = ints$aie$aie.est,
+                       Std.error = ints$aie$aie.se.delta,
+                       lwr = ints$aie$aie.ll,
+                       upr = ints$aie$aie.ll,
+                       t.val = NA)
+  
+  # Interaction at hypothetical values
+  inthyp_df <- data.frame(
+    neuron.clusters = i,
+    EffectType = "HypotheticalInt",
+    term = "Sex:Status",
+    Estimate = ints$inthyp$hat,
+    Std.error = ints$inthyp$se.int.est,
+    lwr = ints$inthyp$hat - ints$inthyp$se.int.est,
+    upr = ints$inthyp$hat + ints$inthyp$se.int.est,
+    t.val = ints$inthyp$t.val)
+  
+  neuron.clusters.mod <- rbind(aie_df, inthyp_df)
+  
+  # Tukey for all pairwise comparisons
+  tmp2 = glm(cbind(Freq,
+                   total.neuron.count - Freq) ~ orig.ident,
+             data = subset(dat.for.stats,
+                           seurat_clusters == i),
              family = binomial)
   
   # use emmeans to get pairwise differences
-  emm = emmeans(tmp2,
-                ~ "orig.ident")
+  emm = emmeans(tmp2, ~ "orig.ident")
   emm.res = pairs(emm)
+  data.frame(contrast = summary(emm.res)$contrast,
+             Estimate = summary(emm.res)$estimate,
+             Std.error = summary(emm.res)$SE,
+             z.ratio = summary(emm.res)$z.ratio,
+             adj.pval = round((summary(emm.res)$p.value),
+                              digits = 4)) %>%
+    mutate(neuron.clusters = i) -> emm.res.df
   
+  # combine results and save
+  neuron.clusters.glm = rbind(neuron.clusters.glm,
+                              neuron.clusters.glm.fdr)
+  neuron.clusters.pairwise = rbind(neuron.clusters.pairwise,
+                                   emm.res.df)
+  neuron.clusters.modglm = rbind(neuron.clusters.modglm,
+                                 neuron.clusters.mod)
   
-  # save results
-  emm.res.df = data.frame(Estimate = summary(emm.res)$estimate,
-                          Std.error = summary(emm.res)$SE,
-                          z.ratio = summary(emm.res)$z.ratio,
-                          adj.pvalue = summary(emm.res)$p.value,
-                          contrast = summary(emm.res)$contrast,
-                          z.value = NA) %>%
-    mutate(seurat_clusters = i)
-  
-  ## combine in data frame
-  neuron.cluster.glm = neuron.cluster.glm %>% 
-    rbind(tmp.res.df) %>% 
-    rbind(emm.res.df)
+  rm(neuron.clusters.mod, emm.res.df, neuron.clusters.glm.fdr)
+  cat("Processed cluster", i, "\n")
 }
 
 
-## FDR correction for all comparisons
-neuron.cluster.glm.fdr = neuron.cluster.glm %>% 
-  filter(is.na(z.ratio)) %>% 
-  filter(contrast != "(Intercept)") %>% 
-  mutate(p.adjust.fdr = p.adjust(adj.pvalue,
-                                 method = 'fdr'))
+write_csv(neuron.clusters.glm,
+          file = 'neurons/stats/neuron_clusterGLM/neuron_clusterGLM.csv')
+write_csv(neuron.clusters.pairwise,
+          file = 'neurons/stats/neuron_clusterGLM/neuron_clusters_pairwise.csv')
+write_csv(neuron.clusters.modglm,
+          file = 'neurons/stats/neuron_clusterGLM/neuron_clusters_modglm.csv')
 
-# combine with data frame
-neuron.cluster.glm = neuron.cluster.glm %>% 
-  left_join(neuron.cluster.glm.fdr)
-
-
-
-## create rounded p.value to make it easier to read
-neuron.cluster.glm = neuron.cluster.glm %>% 
-  mutate(adj.pvalue.round = ifelse(is.na(p.adjust.fdr),
-                                   round(adj.pvalue, digits = 4),
-                                   round(p.adjust.fdr, digits = 4)))
-
-## save glm table
-write_csv(neuron.cluster.glm, 'neurons/stats/neuron_clusterGLM.csv')
-
-## create p value dataframe
-neuron.cluster.glm.p = neuron.cluster.glm %>% 
-  dplyr::select(seurat_clusters,
-                adj.pvalue.round,
-                contrast) %>% 
-  pivot_wider(names_from = contrast,
-              values_from = adj.pvalue.round) 
 
 #### Neuron cluster distributions ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
@@ -650,6 +746,8 @@ ggsave('neurons/neuron.cluster.tree.png',
 #### Neuron marker specificity score ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
 
+Idents(MSCneurons.reclust) = "seurat_clusters"
+
 # Prep seurat object for running find markers - need to run before FindAllMarkers
 PrepSCTFindMarkers(MSCneurons.reclust,
                    assay = "SCT") -> MSCneurons.reclust
@@ -663,9 +761,6 @@ FindAllMarkers(MSCneurons.reclust,
                assay = 'SCT') -> neuron.markers.df 
 
 # create gene column
-neuron.markers.df %>% 
-  rownames_to_column('gene') -> neuron.markers.df
-
 neuron.markers.df %>% 
   mutate(specificity = avg_log2FC*(pct.1/pct.2)) -> neuron.markers.df
 
@@ -694,20 +789,34 @@ neuron.markers.df %>%
 neuron.markers.df.reduce.heatmap[is.na(neuron.markers.df.reduce.heatmap)] = 0
 
 # graph heatmap
-neuron.markers.df.reduce.heatmap %>% 
+neuron.markers.df.reduce.heatmap %>%
   pheatmap::pheatmap(na_col = 'white',
-                     breaks = c(-1, -0.1, 0.1, 1, 10, 65),
-                     col = c('lightblue',
-                             'white',
+                     breaks = c(-0.1, 0.1, 0.5, 2, 5, 15),
+                     legend_breaks = c(1, 5, 15, 30),
+                     angle_col = 45,
+                     fontsize = 15,
+                     fontsize_row = 15,
+                     fontsize_col = 12,
+                     fontsize_legend = 7,
+                     col = c('white',
+                             'lightblue',
                              'yellow',
                              'orange',
                              'red'),
+                     border_color = "white",
                      cluster_rows = F,
                      cluster_cols = F,
-                     main = 'Neuron cluster specificity genes',
+                     main = 'Cluster Markers',
                      filename = 'neurons/neuron_markers.heatmap.png',
-                     width = 10,
-                     height = 10)
+                     width = 5,
+                     height = 15)
+
+# use ComplexHeatmap for customization and scaling
+scaled.neuron.markers <- table(MSCneurons.reclust@meta.data$seurat_clusters) %>%
+  as.data.frame() %>% 
+  rename(cluster = Var1,
+         total.neuron.count = Freq) %>% 
+  full_join(neuron.markers.df.reduce) # %>% # figure out best way to scale using full marker list?
 
 #### Neuron cluster limma-trend (DGE) ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
@@ -724,7 +833,8 @@ subset_idents = subset_idents[-length(subset_idents)]
 
 # subset Seurat obj
 l.dfs <- subset_by_ident(MSCneurons.reclust, 
-                         subset_idents = subset_idents)
+                         subset_idents = subset_idents,
+                         cluster = TRUE)
 
 # raw counts and norm.counts of variable genes
 dge_data <- prep.for.DGE(l.dfs, 
@@ -741,7 +851,8 @@ save(limma_results, file = "./neurons/stats/limma_trend/neuronCluster_limma_resu
 setwd(paste0(root.dir, "/DGE_CellTypes/neurons"))
 
 # how to determine max log scale before graphing? 
-max.log.scale = 100;
+# max.log.scale = 100;
+
 # make sure these match upper/lower case
 sex = c("Female", "Male");
 status = c("Dom", "Sub");
@@ -749,7 +860,7 @@ status = c("Dom", "Sub");
 rrho_results <- get.RRHO(limma_results,
                          group.by = sex,
                          compare.across = status,
-                         new.max.log = max.log.scale,
+                         # new.max.log = max.log.scale,
                          outdir = "./RRHO")
 
 save(rrho_results, file = "./RRHO/rrho_results.rda")
@@ -782,7 +893,7 @@ for (dataset_name in names(rrho_results)) {
   
   cat("Saving plot for", dataset_name, "\n")
   
-  ggsave(paste0('./neurons/RRHO/', dataset_name,
+  ggsave(paste0('./RRHO/', dataset_name,
                 '/RR_quad_genes_count.png'),
          width = 7, height = 4)
 
