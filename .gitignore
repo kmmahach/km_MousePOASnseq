@@ -8,8 +8,6 @@
 /hdWGCNA/hdwgcna_env/
 /DGE_CellTypes/RRHO/
 /DGE_CellTypes/neurons/test_subset/
-/DGE_CellTypes/neurons/RRHO/
-/DGE_CellTypes/neurons/neuroendocrine_genes/RRHO/
 /Scripts/km_cleanScripts/package_logs/
 /Scripts/km_cleanScripts/data/*
 !/Scripts/km_cleanScripts/data/km_rscvi_docker
