@@ -153,9 +153,13 @@ VariableFeaturePlot_patched <- function(object,
     xlab("Geometric mean of expression") +
     ylab("Residual variance") +
     theme_classic() +
+  guides(color = guide_legend(override.aes = list(size = 3))) +
     theme(plot.title = element_text(hjust = 0.5, size = 15),
-          legend.title = element_blank(), legend.position = "top",
-          legend.text = element_text(size = 15))
+          legend.title = element_blank(), 
+          legend.position = "top",
+          legend.text = element_text(size = 12),
+          legend.byrow = TRUE,
+          legend.key.spacing.x = unit(1, "cm"))
   
   # Add gene labels if desired
   if (label) {
@@ -866,22 +870,24 @@ plot.dim.clust <- function(list_of_SeuratObj,
     
     ebp <- ElbowPlot(x) + 
       theme(plot.margin = unit(c(1, 1, 1, 1), "cm"))
+    
     vfp <- VariableFeaturePlot_patched(x) + 
       theme(plot.margin = unit(c(0.25, 1, 1, 1), "cm"))
+    
     dmp <- DimPlot(x, 
+                   group.by = "seurat_clusters",
                    reduction = "umap",
-                   label = TRUE,
-                   repel = TRUE) + 
-      labs(color = "cluster") +
-      theme(plot.margin = unit(c(1, 1, 1, 1), "cm"))
+                   label = FALSE) + 
+      labs(color = "cluster",
+           title = NULL) +
+      theme(plot.margin = unit(c(1, 3, 1, 1.5), "cm"))
     
     ftp <- FeaturePlot(x, 
                        reduction = "umap",
                        features = "nFeature_RNA",
-                       label = TRUE,
-                       repel = TRUE) +
+                       label = FALSE) +
       labs(title = NULL, color = "nFeature_RNA") +
-      theme(plot.margin = unit(c(1, 1, 1, 1), "cm"))
+      theme(plot.margin = unit(c(1, 1, 1, 1.5), "cm"))
     
     plots <- arrangeGrob(ebp,dmp,vfp,ftp,
                          widths = c(0.75, 1),
