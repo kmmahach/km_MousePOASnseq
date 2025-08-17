@@ -194,7 +194,7 @@ plot_mer_facet <- function(mer_df, group) {
     labs(
       x = "Sex × Status",
       y = "Marginal Effect (MER)",
-      title = paste0("MER: Cluster ", group)
+      title = paste0("MER: ", group, " neurons")
     ) +
     theme_classic() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
@@ -203,12 +203,12 @@ plot_mer_facet <- function(mer_df, group) {
     geom_point(position = position_dodge(width = 0.5), size = 3) +
     geom_hline(yintercept = 0, linetype = "dashed") +
     labs(y = "Predicted Neuron Proportion", x = "Sex × Status",
-         title = paste0("Predicted values: Cluster ", group)) +
+         title = paste0("Predicted values: ", group, " neurons")) +
     theme_classic() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
   
   return(grid.arrange(p_est, p_pred,
-                      widths = c(1, 0.5),
+                      widths = c(1, 0.6),
                       nrow = 1))
 }
 

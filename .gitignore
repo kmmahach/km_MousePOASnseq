@@ -6,7 +6,6 @@
 ._.DS_Store
 /summary/
 /hdWGCNA/hdwgcna_env/
-/DGE_CellTypes/RRHO/
 /DGE_CellTypes/neurons/test_subset/
 /Scripts/km_cleanScripts/package_logs/
 /Scripts/km_cleanScripts/data/*

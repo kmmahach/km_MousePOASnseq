@@ -200,18 +200,19 @@ sum_neur_indiv %>%
     cols = starts_with("sum_"),
     names_to = "gene",
     names_prefix = "sum_",
-    values_to = "counts"
+    values_to = "Freq"
   ) %>%
   dplyr::select(orig.ident,
                 indiv_genotype,
                 gene,
-                counts,
+                Freq,
                 cell_count) %>%
-  mutate(sex =
+  rename(total.neuron.count = cell_count) %>% 
+  mutate(Sex =
            ifelse(grepl("female", orig.ident),
                   "Female",
                   "Male")) %>%
-  mutate(status =
+  mutate(Status =
            ifelse(grepl("dom", orig.ident),
                   "Dom",
                   "Sub")) -> dat.for.stats
@@ -219,186 +220,191 @@ sum_neur_indiv %>%
 
 #### Neuroendocrine genes; neuron stats ####
 
-# subset genes by sample
-select_neur.table_orig.ident %>% 
-  mutate(All = 1) %>% 
-  group_by(orig.ident,
-           indiv_genotype) %>% 
-  summarise_at(c(subset_genes, 'All'), 
-               sum) %>% 
-  pivot_longer(cols = c(subset_genes, 'All'),
-               names_to = 'Genes',
-               values_to = 'Counts') %>% 
-  group_by(orig.ident,
-           indiv_genotype) %>% 
-  mutate(Total.count = max(Counts)) %>% 
-  ungroup() %>% 
-  mutate(Percentage = round(100*Counts/Total.count, 2)) %>% 
-  filter(Genes != 'All') -> select_neur.counts
+# GLM on neuron proportions
+neuron.genes.glm <- data.frame()
+neuron.genes.pairwise <- data.frame()
+neuron.genes.modglm <- data.frame()
 
-# add variable for status and sex
-select_neur.counts %>% 
-  mutate(Sex = ifelse(grepl("female", orig.ident),
-                      "female", "male")) %>% 
-  mutate(Status = ifelse(grepl("dom", orig.ident),
-                         "dom", "sub")) -> select_neur.counts
-
-# graph percentage neuroendocrine per sample
-select_neur.counts %>% 
-  ggplot(aes(x = reorder(Genes, -Percentage),
-             y = Percentage,
-             color = orig.ident)) +
-  geom_boxplot(width = 0,
-               position = position_dodge(0.75),
-               size = 1) +
-  geom_point(position = position_dodge(0.75),
-             aes(shape = indiv_genotype,
-                 group = orig.ident),
-             size = 3) +
-  theme_classic() + 
-  scale_color_manual(values = c("#CC5500",
-                                "#FF6A00",
-                                "#0077CC",
-                                "#0095FF")) +
-  xlab('') + ylab('% of neurons') +
-  ggtitle('Percent nuclei expressing neur-endo genes')
-
-ggsave('neurons/neuroendocrine_genes/pctNeurons_exprSelectGenes_by.indiv_genotype.png',
-       height = 5, width = 5)
-
-# GLM (binom) on cluster proportions
-neuron.genes.glm = data.frame(matrix(ncol = 7, nrow = 0))
-
-colnames(neuron.genes.glm) <- c("contrast",
-                                "Estimate",
-                                "Std.error",
-                                "z.value",
-                                "adj.pvalue",
-                                "z.ratio",
-                                "Genes")
-
-# loop through each cluster to generate stats
-for (i in unique(select_neur.counts$Genes)) {
+for (gene in subset_genes) {
   
   # binomial GLM on sex and status w/ interaction term
-  tmp = glm(cbind(Counts, Others) ~ Sex*Status, 
-            data = select_neur.counts %>% 
-              filter(Genes == i) %>% 
-              mutate(Others = Total.count - Counts,
-                     Sex = as.factor(Sex),
-                     Status = as.factor(Status)), 
+  tmp = glm(cbind(Freq,
+                  total.neuron.count - Freq) ~ Sex*Status,
+            data = subset(dat.for.stats,
+                          gene == gene),
             family = binomial)
   
   # multivariate t distribution to correct for multiple testing
   tmp.res = summary(glht(tmp))
+  data.frame(Estimate = tmp.res$test$coefficients,
+             Std.error = tmp.res$test$sigma,
+             z.value = tmp.res$test$tstat,
+             p.value = tmp.res$test$pvalues) %>%
+    rownames_to_column('Predictor') %>%
+    mutate(gene = gene) -> tmp.res.df
   
-  # save results
-  tmp.res.df = data.frame(Estimate = tmp.res$test$coefficients,
-                          Std.error = tmp.res$test$sigma,
-                          z.value = tmp.res$test$tstat,
-                          adj.pvalue = tmp.res$test$pvalues,
-                          z.ratio = NA) %>% 
-    rownames_to_column('contrast') %>% 
-    mutate(Genes = i)
+  # FDR correction for all comparisons
+  tmp.res.df %>%
+    filter(Predictor != "(Intercept)") %>%
+    mutate(p.adjust.fdr =
+             round(p.adjust(p.value,
+                            method = 'fdr'),
+                   digits = 4) ) -> neuron.genes.glm.fdr
   
-  # graph confidence intervals
   # get confidence intervals
   ci_out <- confint(tmp.res)
-  ci_df <- as.data.frame(ci_out$confint)
-  ci_df$group <- row.names(ci_df)
-  
+  ci_df <- as.data.frame(ci_out$confint) %>%
+    mutate(Predictor = row.names(.)) %>%
+    filter(!Predictor == "(Intercept)")
+  neuron.genes.glm.fdr %>%
+    full_join(ci_df, by = c("Predictor",
+                            "Estimate")) -> neuron.genes.glm.fdr
   # graph results
-  ci_df %>% 
-    filter(group != "(Intercept)") %>% 
-    ggplot(aes(x = Estimate, 
-               y = group)) +
+  ci_df %>%
+    ggplot(aes(x = Estimate,
+               y = Predictor)) +
     geom_point() +
-    geom_errorbar(aes(xmin = lwr, 
-                      xmax = upr), 
+    geom_errorbar(aes(xmin = lwr,
+                      xmax = upr),
                   width = 0.2) +
-    geom_vline(xintercept = 0, 
+    geom_vline(xintercept = 0,
                linetype = 2) +
-    labs(x = "Difference in Means", 
+    labs(x = "Difference in Means",
          y = "Comparison") +
     theme_classic() +
-    ggtitle(paste0("Genes ", i,": binomial GLM cell count"))
+    ggtitle(paste0(gene," neurons: binomial GLM"))
   
-  ggsave(paste0('neurons/neuroendocrine_genes/', i, '_binomialGLM_cell.count.png'),
+  ggsave(paste0('neurons/neuroendocrine_genes/selectGenesGLM/', gene, '_binomGLM_cell.count.png'),
          width = 6, height = 5)
   
+  # Average marginal effects (AMEs)
+  ame <- slopes(tmp) %>%
+    as.data.frame() %>%
+    mutate(neuron.genes = gene,
+           EffectType = "AME")
+  
+  # Marginal effects at representative values (MERs)
+  mer <- slopes(tmp, type = "response") %>%
+    as.data.frame() %>%
+    mutate(neuron.genes = gene,
+           EffectType = "MER") %>%
+    dplyr::select(!c(rowid,
+                     predicted_lo,
+                     predicted_hi)) %>%
+    distinct()
+  
+  merplots <- plot_mer_facet(mer, group = gene)
+  
+  ggsave(paste0('neurons/neuroendocrine_genes/selectGenesGLM/', gene, '_MER_cell.count.png'),
+         plot = merplots, width = 12, height = 5)
+  
+  write_csv(mer,
+            file = paste0('neurons/neuroendocrine_genes/selectGenesGLM/MER/', gene, '_MERtable.csv'))
+  
+  dat.for.mod <- subset(dat.for.stats,
+                        gene == gene) %>%
+    mutate(Sex = ifelse(Sex=="Female", 1, 0),
+           Status = ifelse(Status=="Dom", 1, 0)) %>%
+    dplyr::select(Freq, total.neuron.count, Sex, Status)
+  
+  tmp.for.mod <- glm(cbind(Freq,
+                           total.neuron.count - Freq) ~ Sex*Status,
+                     data = dat.for.mod,
+                     family = binomial)
+  
+  # modglm interaction effects
+  ints <- suppressWarnings(modglm(model = tmp.for.mod,
+                                  vars = c("Sex", "Status"),
+                                  data = dat.for.mod,
+                                  hyps = "means",
+                                  type = "dd"))
+  
+  # Average interaction effect (AIE)
+  aie_df <- data.frame(neuron.genes = gene,
+                       EffectType = "AIE",
+                       term = "Sex:Status",
+                       Estimate = ints$aie$aie.est,
+                       Std.error = ints$aie$aie.se.delta,
+                       lwr = ints$aie$aie.ll,
+                       upr = ints$aie$aie.ll,
+                       t.val = NA)
+  
+  # Interaction at hypothetical values
+  inthyp_df <- data.frame(
+    neuron.genes = gene,
+    EffectType = "HypotheticalInt",
+    term = "Sex:Status",
+    Estimate = ints$inthyp$hat,
+    Std.error = ints$inthyp$se.int.est,
+    lwr = ints$inthyp$hat - ints$inthyp$se.int.est,
+    upr = ints$inthyp$hat + ints$inthyp$se.int.est,
+    t.val = ints$inthyp$t.val)
+  
+  neuron.genes.mod <- rbind(aie_df, inthyp_df)
+  
   # Tukey for all pairwise comparisons
-  tmp2 = glm(cbind(Counts, Others) ~ orig.ident, 
-             data = select_neur.counts %>% 
-               filter(Genes == i) %>% 
-               mutate(Others = Total.count - Counts,
-                      Sex = as.factor(Sex),
-                      Status = as.factor(Status)), 
+  tmp2 = glm(cbind(Freq,
+                   total.neuron.count - Freq) ~ orig.ident,
+             data = subset(dat.for.stats,
+                           gene == gene),
              family = binomial)
   
   # use emmeans to get pairwise differences
   emm = emmeans(tmp2, ~ "orig.ident")
   emm.res = pairs(emm)
+  data.frame(contrast = summary(emm.res)$contrast,
+             Estimate = summary(emm.res)$estimate,
+             Std.error = summary(emm.res)$SE,
+             z.ratio = summary(emm.res)$z.ratio,
+             adj.pval = round((summary(emm.res)$p.value),
+                              digits = 4)) %>%
+    mutate(neuron.genes = gene) -> emm.res.df
   
+  # combine results and save
+  neuron.genes.glm = rbind(neuron.genes.glm,
+                              neuron.genes.glm.fdr)
+  neuron.genes.pairwise = rbind(neuron.genes.pairwise,
+                                   emm.res.df)
+  neuron.genes.modglm = rbind(neuron.genes.modglm,
+                                 neuron.genes.mod)
   
-  # save results
-  emm.res.df = data.frame(Estimate = summary(emm.res)$estimate,
-                          Std.error = summary(emm.res)$SE,
-                          z.ratio = summary(emm.res)$z.ratio,
-                          adj.pvalue = summary(emm.res)$p.value,
-                          contrast = summary(emm.res)$contrast,
-                          z.value = NA) %>%
-    mutate(Genes = i)
-  
-  # combine results
-  neuron.genes.glm = neuron.genes.glm %>% 
-    rbind(tmp.res.df) %>% 
-    rbind(emm.res.df)
+  rm(neuron.genes.mod, emm.res.df, neuron.genes.glm.fdr)
+  cat("Processed gene", gene, "\n")
 }
 
 
-# FDR correction for all comparisons
-neuron.genes.glm.fdr = neuron.genes.glm %>%
-  filter(is.na(z.ratio)) %>%
-  filter(contrast != "(Intercept)") %>%
-  mutate(p.adjust.fdr = p.adjust(adj.pvalue,
-                                 method = 'fdr'))
-
-# combine with data frame
-neuron.genes.glm = neuron.genes.glm %>%
-  left_join(neuron.genes.glm.fdr)
-
-
-# round p-vals to .0001
-neuron.genes.glm = neuron.genes.glm %>%
-  mutate(adj.pvalue.round = ifelse(is.na(p.adjust.fdr),
-                                   round(adj.pvalue, digits = 4),
-                                   round(p.adjust.fdr, digits = 4)))
-
 write_csv(neuron.genes.glm,
-          file = 'neurons/stats/neuron_selectGenesGLM.csv')
+          file = 'neurons/neuroendocrine_genes/selectGenesGLM/neuron_geneGLM.csv')
+write_csv(neuron.genes.pairwise,
+          file = 'neurons/neuroendocrine_genes/selectGenesGLM/neuron_genes_pairwise.csv')
+write_csv(neuron.genes.modglm,
+          file = 'neurons/neuroendocrine_genes/selectGenesGLM/neuron_genes_modglm.csv')
 
 
 #### DGE with limma ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
 
-# load if starting here: 
-load(paste0(root.dir, "/HypoMap/data/integrated_seurat_withHypoMap_predictions.rda"))
+# # load if starting here: 
+# load(paste0(root.dir, "/HypoMap/data/integrated_seurat_withHypoMap_predictions.rda"))
+# 
+# # set idents
+# Idents(object = int.ldfs) <- "parent_id.broad.prob"
+# 
+# # subset to neurons
+# int.ldfs = subset(int.ldfs,
+#                   idents = c("C7-2: GABA", "C7-1: GLU"))
+# 
+# # subset genes
+# subset_genes <- c("Esr1",
+#                   "Ar",
+#                   "Pgr",
+#                   "Nr3c1",
+#                   "Nr3c2")
 
-# set idents
-Idents(object = int.ldfs) <- "parent_id.broad.prob"
-
-# subset to neurons
-int.ldfs = subset(int.ldfs,
-                  idents = c("C7-2: GABA", "C7-1: GLU"))
-
-# subset genes
-subset_genes <- c("Esr1",
-                  "Ar",
-                  "Pgr",
-                  "Nr3c1",
-                  "Nr3c2")
-
-l.dfs <- subset_by_gene(int.ldfs, subset_genes, min_count = 0.5)
+l.dfs <- subset_by_gene(int.ldfs, 
+                        subset_genes, 
+                        slot = "counts",
+                        min_count = 2)
 
 
 # raw counts and norm.counts of variable genes

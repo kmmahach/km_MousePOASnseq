@@ -390,7 +390,7 @@ for (i in unique(dat.for.stats$seurat_clusters)) {
                      predicted_hi)) %>%
     distinct()
   
-  merplots <- plot_mer_facet(mer, group = i)
+  merplots <- plot_mer_facet(mer, group = paste0("Cluster", i))
   
   ggsave(paste0('neurons/stats/neuron_clusterGLM/graphs/cluster_', i, '_MER_cell.count.png'),
          plot = merplots, width = 10, height = 5)
