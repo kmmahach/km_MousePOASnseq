@@ -870,37 +870,4 @@ save(rrho_results, file = "./cluster_stats/RRHO/rrho_results.rda")
 
 
 # graph gene counts in each RR quadrant
-newlist = list()
-
-for (dataset_name in names(rrho_results)) {
-  quads <- rrho_results[[dataset_name]]$RedRibbon.quads
-  df <- rrho_results[[dataset_name]]$df
-  
-  newlist[[dataset_name]] <- graphRRHO(quads, df)
-  df <- data.frame(newlist[[dataset_name]])
-  
-  df %>% 
-    group_by(RRquadrant) %>% 
-    summarise(Count = n(),
-              NAs = sum(is.na(Gene))) %>% 
-    mutate(Total = ifelse(NAs > 0, Count - NAs, Count)) %>% 
-    as.data.frame() %>% 
-    ggplot(aes(x = reorder(RRquadrant, -Total),
-               y = Total,
-               label = Total)) +
-    geom_label() +
-    theme_classic() +
-    ylab('Number of genes per quadrant') +
-    xlab('') +
-    ggtitle(paste0('Neuron ', dataset_name,' RR quadrants'))
-  
-  cat("Saving plot for", dataset_name, "\n")
-  
-  ggsave(paste0('./cluster_stats/RRHO/', dataset_name,
-                '/RR_quad_genes_count.png'),
-         width = 7, height = 4)
-
-}
-
-
-
+plot.RRHO.counts(rrho_results, "./cluster_stats/RRHO")
