@@ -441,3 +441,7 @@ rrho_results <- get.RRHO(limma_results,
                          outdir = "./neurons/neuroendocrine_genes/RRHO")
 
   save(rrho_results, file = "./neurons/neuroendocrine_genes/RRHO/rrho_results.rda")
+  
+### Stop here - line 2492 in DEG_snseq_mouse_IMG.R ####
+  # lines 2492 - 3011 (end) include limmatrend and RRHO analyses for all neurons expressing any neuropeptide
+  # not in manuscript (?)

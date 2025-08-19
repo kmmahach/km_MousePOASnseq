@@ -76,6 +76,12 @@ load_packages <- function(pkgs,
   message("Combined package log saved to: ", report_file)
 }
 
+# get names of list elements for plotting
+namelist <- function(...) {
+  group <- as.list(do.call("names", list(...))) 
+  return(group)
+}
+
 # make list with automatic name propagation 
 as_named_list <- function(...) {
   dots <- rlang::enquos(...)
@@ -212,6 +218,59 @@ plot_mer_facet <- function(mer_df, group) {
                       nrow = 1))
 }
 
+# pull overlapping genes from RRHO2/RedRibbon results
+get.overlaps <- function(x) {
+  
+  # overlaps per quadrant (RRHO2)
+  RRHO_genes <- x[grep("^genelist", names(x))]
+  
+  overlap_RRHO2 <- map_dfr(names(RRHO_genes), function(nm) {
+    overlap_name <- paste0("gene_list_overlap_", str_remove(nm, "genelist_"))
+    tibble(quadrant = str_remove(nm, "genelist_"),
+           genes = x[[nm]][[overlap_name]])
+  })
+  
+  # overlaps per quadrant (RedRibbon)
+  RedRibbon_genes <-x$RedRibbon.quads[names(x$RedRibbon.quads)]
+  
+  overlap_RedRibbon <- map_dfr(names(RedRibbon_genes), function(nm) {
+    overlap_name <- paste(nm)
+    tibble(quadrant = overlap_name,
+           genes = x$df[x$RedRibbon.quads[[overlap_name]]$positions,1])
+  })
+  
+  quad_genes <- as_named_list(overlap_RRHO2, overlap_RedRibbon)
+  return(quad_genes)
+  
+}
+
+get.percent.overlap <- function(dat) {
+  
+  sapply(dat, \(x) {
+    
+    if(is.null(quadrants_to_check)) {
+      quadrants_to_check = unique(x$quadrant)
+    }
+    
+    overlap_pct = data.frame()
+    
+    for(quad in quadrants_to_check) {
+      x.quad = as.data.frame(x) %>% 
+        filter(quadrant == quad) 
+      
+      pct.overlap = 100 * length(intersect(gene_list_input, x.quad$genes)) / length(x.quad$genes)
+      
+      total = data.frame(quad, 
+                         pct.overlap, 
+                         total.genes = length(x.quad$genes))
+      overlap_pct = rbind(overlap_pct, total)
+    }
+    
+    return(as_named_list(overlap_pct))
+    
+  })
+}
+
 #### processing for DGE/RRHO ####
 prep.for.DGE <- function(list_of_SeuratObj,
                          assay = 'integrated',
@@ -219,6 +278,10 @@ prep.for.DGE <- function(list_of_SeuratObj,
                          selection.method = 'vst',
                          pseudo_bulk = FALSE,
                          group.by = NULL) {
+  
+  if(!is.list(list_of_SeuratObj)) {
+    list_of_SeuratObj <- as_named_list(list_of_SeuratObj)
+  }
   
   # find union of variable features across all objects
   var_feats_list <- lapply(list_of_SeuratObj, \(x) {
@@ -693,11 +756,13 @@ get.RRHO <- function(results_list,
     keep <- vapply(parts, function(x) {
       left  <- unlist(strsplit(x[1], "_"))
       right <- unlist(strsplit(x[2], "_"))
+      
       # extract the compare.across and group.by values from each side
       left_compare  <- left[left %in% compare.across.values]
       right_compare <- right[right %in% compare.across.values]
       left_group  <- left[left %in% group.by.values]
       right_group <- right[right %in% group.by.values]
+      
       # comparisons where compare.across values are different, AND group.by values are the same
       length(left_compare)  == 1 &&
         length(right_compare) == 1 &&
@@ -828,44 +893,257 @@ get.RRHO <- function(results_list,
   return(rrho_results)
 }
 
-# create list of RRHO outcomes and deal with empty quadrants for graphing
-graphRRHO <- function(rr, df) {
+# check for overlapping genes in RRHO2/RedRibbon quadrants 
+check.quadrants <- function(rrho_results_list,
+                            gene_list,
+                            quadrants_to_check = NULL,
+                            outdir = NULL) {
   
-  safe_quadrant_df <- function(quad_data, label, df) {
-    if (is.null(quad_data) || is.null(quad_data$positions) || length(quad_data$positions) == 0) {
-      message(dataset_name, ": quadrant '", label, "' is empty — skipping.")
-      return(data.frame(Gene = NA,
-                        RRquadrant = label,
-                        stringsAsFactors = FALSE))
-    } else {
-      return(data.frame(Gene = df[quad_data$positions, "gene"],
-                        RRquadrant = label,
-                        stringsAsFactors = FALSE))
+  if(!is.list(rrho_results_list)) {
+    stop("input must be a results list output by get.RRHO")
+  }
+  
+  if(!is.vector(gene_list) & !is.character(gene_list)) {
+    gene_list_input = as.vector(gene_list$gene, mode = "character")
+  } else {
+    gene_list_input = gene_list
+  }
+  
+  overlaps_list <- lapply(rrho_results_list, get.overlaps)
+  
+  overlaps_pct <- lapply(overlaps_list, get.percent.overlap)
+  
+  if(!is.null(outdir)) {
+    
+    for(subset_name in names(rrho_results_list)) {
+      
+      pctRRHO <- overlaps_pct[[subset_name]]$overlap_RRHO2.overlap_pct
+      pctRedRibbon <- overlaps_pct[[subset_name]]$overlap_RedRibbon.overlap_pct
+      
+      overlaps_list[[subset_name]]$overlap_RRHO2 %>% 
+        append(., as_named_list(pctRRHO)) -> overlaps_list[[subset_name]]$overlap_RRHO2
+      
+      overlaps_list[[subset_name]]$overlap_RedRibbon %>% 
+        append(., as_named_list(pctRedRibbon)) -> overlaps_list[[subset_name]]$overlap_RedRibbon
+      
+      overlaps_list = overlaps_list %>% 
+        append(., as_named_list(gene_list))
+      
+      if(length(grep(paste0("/",subset_name,"$"), list.dirs(outdir))) > 0) {
+
+        dir <- paste(outdir, subset_name, subset_name, sep = "/")
+        file <- paste(deparse(substitute(gene_list)), "overlaps.rda", sep = "_")
+        
+        filename <- paste(dir, file, sep = "_")
+        
+      } else {
+        
+        dir <- paste(outdir, subset_name, sep = "/")
+        file <- paste(deparse(substitute(gene_list)), "overlaps.rda", sep = "_")
+        
+        filename <- paste(dir, file, sep = "_")
+      }
+      save(overlaps_list, file = filename)
     }
   }
   
-  # Try to get quadrants, return empty df if it fails
-  quad <- tryCatch(
-    quadrants <- rr,
-    error = function(e) {
-      message("Error getting quadrants: ", e$message)
-      return(NULL)
-    }
-  )
-  
-  if (is.null(quad)) {
-    return(data.frame(Gene = character(0),
-                      RRquadrant = character(0),
-                      stringsAsFactors = FALSE))
-  }
-  
-  RedRibbon.quads <- rbind(
-    safe_quadrant_df(quad$upup, "upup", df),
-    safe_quadrant_df(quad$downdown, "downdown", df),
-    safe_quadrant_df(quad$updown, "updown", df),
-    safe_quadrant_df(quad$downup, "downup", df)
-  )
-  
-  return(RedRibbon.quads)
+  return(overlaps_pct)
 }
 
+
+plot.RRHO.counts <- function(rrho_results_list,
+                             outdir) {
+  
+  for (set in names(rrho_results)) {
+    
+    gene_lists <- rrho_results[[set]]$RedRibbon.quads[ names(rrho_results[[set]]$RedRibbon.quads) ]
+    
+    map_dfr(names(gene_lists), function(q) {
+      data.frame(quadrant = q,
+                 overlap_length = length(rrho_results[[set]]$df[ gene_lists[[q]]$positions, 1 ] )) 
+      }
+    ) %>% 
+      ggplot(aes(x = reorder(quadrant, -overlap_length), 
+                 y = overlap_length,
+                 label = overlap_length)) +
+      geom_label() +
+      theme_classic() +
+      ylab('Number of genes per quadrant') +
+      xlab('') +
+      ggtitle(paste0(set,' RedRibbon quadrants'))
+    
+    cat("Saving RedRibbon counts plot for", set, "\n")
+    
+    ggsave(paste(outdir, set,'RedRibbon_quadGenes_count.png', sep = "/"),
+           width = 5, height = 4)
+    
+    gene_lists <- rrho_results[[set]][ grep("^genelist", names(rrho_results[[set]])) ]
+    
+    map_dfr(names(gene_lists), function(q) {
+      nm <- paste0("gene_list_overlap_", str_remove(q, "genelist_"))
+      data.frame(quadrant = str_remove(q, "genelist_"),
+                 overlap_length = length(gene_lists[[q]][[nm]]))
+      }
+    ) %>% 
+      ggplot(aes(x = reorder(quadrant, -overlap_length), 
+                 y = overlap_length,
+                 label = overlap_length)) +
+      geom_label() +
+      theme_classic() +
+      ylab('Number of genes per quadrant') +
+      xlab('') +
+      ggtitle(paste0(set,' RRHO2 quadrants'))
+    
+    ggsave(paste(outdir, set,'RRHO2_quadGenes_count.png', sep = "/"),
+           width = 5, height = 4)
+    
+    cat("Saving RRHO2 counts plot for", set, "\n")
+  }
+}
+
+plot.overlaps <- function(rrho_results_list,
+                          gene_list,
+                          quadrants_to_check = NULL,
+                          subtitle = NULL,
+                          group.by,
+                          outdir) {
+  
+  if(!is.list(rrho_results_list)) {
+    stop("input must be a results list output by get.RRHO")
+  }
+  
+  if(!is.null(subtitle)) {
+    subtitle = subtitle
+  } else {
+    subtitle = NA
+  }
+  
+  gene_list_name <- deparse(substitute(gene_list))
+    
+  plot.dat <- function(dat) {
+    dat <- mapply("c", dat, namelist(dat),
+                SIMPLIFY = FALSE)
+    
+    lapply(dat, \(x) {
+      
+      analysis <- sub(".*?_", "", x[[3]])
+      
+      if(is.null(quadrants_to_check)) {
+        quadrants_to_check = unique(x$quadrant)
+      }
+      
+      for(quad in quadrants_to_check) {
+        x.quad = as.data.frame(x) %>% 
+          filter(quadrant == quad) 
+        
+        gene_list_q <- gene_list %>% 
+          filter(gene %in% x.quad$genes) 
+        
+        col1 <- paste(group.by)
+        col2 <- "count"
+        
+        gene_list_q %>% 
+          group_by(get(group.by)) %>% 
+          summarize(count = n()) %>% 
+          rename_with(.cols = 1, ~paste(group.by)) %>% 
+          ggplot(aes(reorder(.data[[col1]], -.data[[col2]]),
+                     .data[[col2]])) +
+          geom_point() +
+          theme_classic() +
+          xlab(col1) +
+          ylab('Number of genes') +
+          ggtitle(paste(analysis, quad, "genes in", gene_list_name, sep = " "),
+                         subtitle = subtitle)
+        
+        ggsave(paste0(paste(outdir, set, analysis, sep = "/"), "_",
+                      paste(quad, "Genes_in", gene_list_name, sep = "_"),
+                      ".png"), height = 7, width = 7)
+        
+      }
+      
+    })
+  }
+  
+  # plot number of cluster markers in RRHO2 each quadrant
+  for (set in names(rrho_results_list)) {
+    
+    overlaps_list <- lapply(rrho_results, get.overlaps)
+    
+    cat("Saving RRHO2 plot(s) for", set, "\n")
+    
+    lapply(overlaps_list, plot.dat)
+    
+  }
+}
+
+
+gene_lists <- rrho_results[[set]]$RedRibbon.quads[ names(rrho_results[[set]]$RedRibbon.quads) ]
+cat("Saving RedRibbon plot(s) for", set, "\n")
+
+for (q in quadrants_to_check) {
+  
+  map_dfr(names(gene_lists), function(q) {
+    data.frame(quadrant = q,
+               overlaps = rrho_results[[set]]$df[ gene_lists[[q]]$positions, 1 ])
+  }
+  ) -> quad_genes
+  
+  gene_list_q = subset(gene_list_input, intersect(quad_genes))
+  
+  gene_list_q %>% 
+    group_by(group.by) %>% 
+    summarize(count = n()) %>% 
+    ggplot(aes(x = reorder(as.character(cluster), -count),
+               y = count)) +
+    geom_point() +
+    theme_classic() +
+    xlab(paste(group.by)) +
+    ylab('Number of genes') +
+    ggtitle(paste0('Overlap of RedRibbon', q, "genes and ", deparse(substitute(gene_list)),
+                   subtitle = subtitle))
+  
+  ggsave(paste0(paste(outdir, set, "RedRibbon", sep = "/"), 
+                paste(q, "Genes_in", deparse(substitute(gene_list)), sep = "_"),
+                ".png"), height = 7, width = 7)
+}
+
+# # create list of RRHO outcomes and deal with empty quadrants for graphing
+# graphRRHO <- function(rr, df) {
+#   
+#   safe_quadrant_df <- function(quad_data, label, df) {
+#     if (is.null(quad_data) || is.null(quad_data$positions) || length(quad_data$positions) == 0) {
+#       message(dataset_name, ": quadrant '", label, "' is empty — skipping.")
+#       return(data.frame(Gene = NA,
+#                         RRquadrant = label,
+#                         stringsAsFactors = FALSE))
+#     } else {
+#       return(data.frame(Gene = df[quad_data$positions, "gene"],
+#                         RRquadrant = label,
+#                         stringsAsFactors = FALSE))
+#     }
+#   }
+#   
+#   # Try to get quadrants, return empty df if it fails
+#   quad <- tryCatch(
+#     quadrants <- rr,
+#     error = function(e) {
+#       message("Error getting quadrants: ", e$message)
+#       return(NULL)
+#     }
+#   )
+#   
+#   if (is.null(quad)) {
+#     return(data.frame(Gene = character(0),
+#                       RRquadrant = character(0),
+#                       stringsAsFactors = FALSE))
+#   }
+#   
+#   RedRibbon.quads <- rbind(
+#     safe_quadrant_df(quad$upup, "upup", df),
+#     safe_quadrant_df(quad$downdown, "downdown", df),
+#     safe_quadrant_df(quad$updown, "updown", df),
+#     safe_quadrant_df(quad$downup, "downup", df)
+#   )
+#   
+#   return(RedRibbon.quads)
+# }

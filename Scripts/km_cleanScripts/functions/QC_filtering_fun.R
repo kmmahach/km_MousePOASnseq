@@ -77,7 +77,7 @@ load_packages <- function(pkgs,
 }
 
 # get names of list elements for plotting
-namelist <- \(...) {
+namelist <- function(...) {
   group <- as.list(do.call("names", list(...))) 
   return(group)
 }
