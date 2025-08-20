@@ -1077,35 +1077,129 @@ plot.overlaps <- function(rrho_results_list,
 }
 
 
-gene_lists <- rrho_results[[set]]$RedRibbon.quads[ names(rrho_results[[set]]$RedRibbon.quads) ]
-cat("Saving RedRibbon plot(s) for", set, "\n")
 
-for (q in quadrants_to_check) {
+get.GOtop15.RRHO <- function(rrho_results_list,
+                             quadrants_to_check = NULL,
+                             outdir) {
   
-  map_dfr(names(gene_lists), function(q) {
-    data.frame(quadrant = q,
-               overlaps = rrho_results[[set]]$df[ gene_lists[[q]]$positions, 1 ])
+  if(!is.list(rrho_results_list)) {
+    stop("input must be a results list output by get.RRHO")
   }
-  ) -> quad_genes
   
-  gene_list_q = subset(gene_list_input, intersect(quad_genes))
+  plot.go <- function(dat) {
+    
+    # extract names
+    raw_name <- dat[[3]]  
+    set_name <- sub("\\..*$", "", raw_name)                
+    analysis <- sub(".*_", "", sub(".*\\.", "", raw_name))  
+    
+    if(startsWith(outdir, "./")) {
+      outdir <- sub("^\\./", "", outdir)
+    } 
+    
+    cat("starting GO enrichment analysis on", set_name, "( genes from:", analysis, ")\n")
+    
+    x <- as.data.frame(dat[-length(dat)])  
+    
+    if(is.null(quadrants_to_check)) {
+      quadrants_to_check <- unique(x$quadrant)
+    }
+    
+    for(quad in quadrants_to_check) {
+      x.quad <- x %>% 
+        filter(quadrant == quad) 
+      
+      cat("generating GO results for", set_name, "quadrant", quad, "\n")
+      
+      GO.obj <- enrichGO(gene = unique(x.quad$genes), 
+                         OrgDb = "org.Mm.eg.db",
+                         keyType = "SYMBOL", 
+                         ont = "BP")
+      
+      out_dir <- file.path(outdir, set_name)
+      if(!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+      
+      if(sum(GO.obj@result$p.adjust < 0.05) > 5) {
+        
+        # barplot
+        png(file.path(out_dir,
+                      paste(analysis,
+                            quad,
+                            "GO_results.png", 
+                            sep = "_")),
+            res = 300, width = 10, height = 10, units = 'in')
+        
+        print(barplot(GO.obj, showCategory = 15))
+        
+        dev.off()
+        cat("saved barplot for quadrant", quad, "\n")
+        
+        # treeplot
+        png(file.path(out_dir, 
+                      paste(analysis, 
+                            quad, 
+                            "GO_resultsTree.png", 
+                            sep = "_")),
+            res = 300, width = 13.5, height = 10, units = 'in')
+        
+        suppressMessages({  print(GO.obj %>% 
+                                    pairwise_termsim() %>% 
+                                    treeplot())  })
+        
+        dev.off()
+        cat("saved treeplot for quadrant", quad, "\n")
+        
+      } else {
+        message("not enough significant GO terms; skipping quadrant ", quad)
+      }
+    }
+  }
   
-  gene_list_q %>% 
-    group_by(group.by) %>% 
-    summarize(count = n()) %>% 
-    ggplot(aes(x = reorder(as.character(cluster), -count),
-               y = count)) +
-    geom_point() +
-    theme_classic() +
-    xlab(paste(group.by)) +
-    ylab('Number of genes') +
-    ggtitle(paste0('Overlap of RedRibbon', q, "genes and ", deparse(substitute(gene_list)),
-                   subtitle = subtitle))
+  # build overlaps list
+  overlaps_list <- lapply(rrho_results_list, get.overlaps) %>% 
+    unlist(., recursive = FALSE)
   
-  ggsave(paste0(paste(outdir, set, "RedRibbon", sep = "/"), 
-                paste(q, "Genes_in", deparse(substitute(gene_list)), sep = "_"),
-                ".png"), height = 7, width = 7)
+  overlaps_list <- mapply("c", overlaps_list, 
+                          namelist(overlaps_list),
+                          SIMPLIFY = FALSE)
+  
+  for(i in seq_along(overlaps_list)) {
+    dat <- overlaps_list[[i]]
+    plot.go(dat)
+  }
 }
+
+
+# 
+# gene_lists <- rrho_results[[set]]$RedRibbon.quads[ names(rrho_results[[set]]$RedRibbon.quads) ]
+# cat("Saving RedRibbon plot(s) for", set, "\n")
+# 
+# for (q in quadrants_to_check) {
+#   
+#   map_dfr(names(gene_lists), function(q) {
+#     data.frame(quadrant = q,
+#                overlaps = rrho_results[[set]]$df[ gene_lists[[q]]$positions, 1 ])
+#     }
+#   ) -> quad_genes
+#   
+#   gene_list_q = subset(gene_list_input, intersect(quad_genes))
+#   
+#   gene_list_q %>% 
+#     group_by(group.by) %>% 
+#     summarize(count = n()) %>% 
+#     ggplot(aes(x = reorder(as.character(cluster), -count),
+#                y = count)) +
+#     geom_point() +
+#     theme_classic() +
+#     xlab(paste(group.by)) +
+#     ylab('Number of genes') +
+#     ggtitle(paste0('Overlap of RedRibbon', q, "genes and ", deparse(substitute(gene_list)),
+#                    subtitle = subtitle))
+#   
+#   ggsave(paste0(paste(outdir, set, "RedRibbon", sep = "/"), 
+#                 paste(q, "Genes_in", deparse(substitute(gene_list)), sep = "_"),
+#                 ".png"), height = 7, width = 7)
+# }
 
 # # create list of RRHO outcomes and deal with empty quadrants for graphing
 # graphRRHO <- function(rr, df) {

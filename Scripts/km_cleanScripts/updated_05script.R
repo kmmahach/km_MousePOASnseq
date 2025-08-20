@@ -75,12 +75,12 @@ neuron.markers %>%
 
 check.quadrants(rrho_results, 
                 neuron_clusterMarkers, 
-                quadrants_to_check = NULL, 
+                quadrants_to_check = NULL, # will try all quadrants 
                 outdir = "./neurons/all_neurons/RRHO")
 
   plot.overlaps(rrho_results,
                 neuron_clusterMarkers,
-                quadrants_to_check = NULL,
+                quadrants_to_check = NULL, # will try all quadrants 
                 subtitle = "adj. p-value < 0.05; specificity > 0.5",
                 group.by = "cluster",
                 outdir = "./neurons/all_neurons/RRHO")
@@ -89,141 +89,10 @@ check.quadrants(rrho_results,
 #### GO Enrichment Analysis for upup genes (all neurons) ####
 # note: top 15 GO terms are the same for RedRibbon & RRHO2 gene lists. 
 # plots are identical
+  
+get.GOtop15.RRHO(rrho_results,
+                 quadrants_to_check = NULL, # will try all quadrants 
+                 outdir = "./neurons/all_neurons/RRHO/GO_enrich")
 
-# RRHO2 list 
-# get list of upup genes to run GO analysis
-neuron.RRHO.DvsS.upup.genes = rrho_results$integrated_neuronSeurat$genelist_uu$gene_list_overlap_uu
-
-upupGO <- enrichGO(gene = unique(neuron.RRHO.DvsS.upup.genes), 
-                   OrgDb = "org.Mm.eg.db",
-                   keyType = "SYMBOL", 
-                   ont = "BP")
-
-
-GO15.plot <- plot(barplot(upupGO,
-                          showCategory = 15))
-
-png("neurons/all_neurons/RRHO/GO_enrich/GOneuron_RRHO2_results_upup.png", 
-    res = 300, 
-    width = 10, 
-    height = 10,
-    units = 'in')
-print(GO15.plot)
-dev.off()
-
-# graph tree
-png("neurons/all_neurons/RRHO/GO_enrich/GOneuron_RRHO2_results_upup_tree.png", 
-    res = 300, 
-    width = 13.5, 
-    height = 10,
-    units = 'in')
-
-upupGO %>% 
-  pairwise_termsim() %>%  # note - warning does not affect results:
-  treeplot()              # ! # Invaild edge matrix for <phylo>. A <tbl_df> is returned. 
-dev.off()
-
-# RedRibbon list 
-# get list of upup genes to run GO analysis
-neuron.RR.DvsS.upup.genes = rrho_results$integrated_neuronSeurat$df[gene_lists$upup$positions,1]
-
-upupGO <- enrichGO(gene = unique(neuron.RR.DvsS.upup.genes), 
-                   OrgDb = "org.Mm.eg.db",
-                   keyType = "SYMBOL", 
-                   ont = "BP")
-
-
-GO15.plot <- plot(barplot(upupGO,
-                          showCategory = 15))
-
-png("neurons/all_neurons/RRHO/GO_enrich/GOneuron_RedRibbon_results_upup.png", 
-    res = 300, 
-    width = 10, 
-    height = 10,
-    units = 'in')
-print(GO15.plot)
-dev.off()
-
-# graph tree
-png("neurons/all_neurons/RRHO/GO_enrich/GOneuron_RedRibbon_results_upup_tree.png", 
-    res = 300, 
-    width = 13.5, 
-    height = 10,
-    units = 'in')
-
-upupGO %>% 
-  pairwise_termsim() %>%  # note - warning does not affect results:
-  treeplot()              # ! # Invaild edge matrix for <phylo>. A <tbl_df> is returned. 
-dev.off()
-
-#### GO Enrichment Analysis for downdown genes (all neurons) ####
-# note: top 15 GO terms are the same for RedRibbon & RRHO2 gene lists. 
-# plots are identical
-
-# RRHO2 list 
-# get list of downdown genes to run GO analysis
-neuron.RRHO.DvsS.downdown.genes = rrho_results$integrated_neuronSeurat$genelist_dd$gene_list_overlap_dd
-
-downdownGO <- enrichGO(gene = unique(neuron.RRHO.DvsS.downdown.genes), 
-                   OrgDb = "org.Mm.eg.db",
-                   keyType = "SYMBOL", 
-                   ont = "BP")
-
-
-GO15.plot <- plot(barplot(downdownGO,
-                          showCategory = 15))
-
-png("neurons/all_neurons/RRHO/GO_enrich/GOneuron_RRHO2_results_downdown.png", 
-    res = 300, 
-    width = 10, 
-    height = 10,
-    units = 'in')
-print(GO15.plot)
-dev.off()
-
-# graph tree
-png("neurons/all_neurons/RRHO/GO_enrich/GOneuron_RRHO2_results_downdown_tree.png", 
-    res = 300, 
-    width = 13.5, 
-    height = 10,
-    units = 'in')
-
-downdownGO %>% 
-  pairwise_termsim() %>%  # note - warning does not affect results:
-  treeplot()              # ! # Invaild edge matrix for <phylo>. A <tbl_df> is returned. 
-dev.off()
-
-# RedRibbon list 
-# get list of downdown genes to run GO analysis
-neuron.RR.DvsS.downdown.genes = rrho_results$integrated_neuronSeurat$df[gene_lists$downdown$positions,1]
-
-downdownGO <- enrichGO(gene = unique(neuron.RR.DvsS.downdown.genes), 
-                   OrgDb = "org.Mm.eg.db",
-                   keyType = "SYMBOL", 
-                   ont = "BP")
-
-
-GO15.plot <- plot(barplot(downdownGO,
-                          showCategory = 15))
-
-png("neurons/all_neurons/RRHO/GO_enrich/GOneuron_RedRibbon_results_downdown.png", 
-    res = 300, 
-    width = 10, 
-    height = 10,
-    units = 'in')
-print(GO15.plot)
-dev.off()
-
-# graph tree
-png("neurons/all_neurons/RRHO/GO_enrich/GOneuron_RedRibbon_results_downdown_tree.png", 
-    res = 300, 
-    width = 13.5, 
-    height = 10,
-    units = 'in')
-
-downdownGO %>% 
-  pairwise_termsim() %>%  # note - warning does not affect results:
-  treeplot()              # ! # Invaild edge matrix for <phylo>. A <tbl_df> is returned. 
-dev.off()
 
 #### analyses for glut & gaba neurons separately in updated_5.5script.R

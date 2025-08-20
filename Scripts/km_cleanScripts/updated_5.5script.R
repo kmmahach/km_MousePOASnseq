@@ -63,7 +63,10 @@ rrho_results <- get.RRHO(limma_results,
                          compare.across = status,
                          outdir = "./neurons/all_neurons/RRHO")
 
-save(rrho_results, file = "./neurons/all_neurons/RRHO/GLU_GABA.rrho_results.rda")
+  save(rrho_results, file = "./neurons/all_neurons/RRHO/GLU_GABA.rrho_results.rda")
+  
+# graph count of genes per quadrant
+  plot.RRHO.counts(rrho_results, "./neurons/all_neurons/RRHO")
 
 #### Compare concordant genes to neuron cluster markers - GLU ####
 # cluster marker genes from updated_03script.R
@@ -81,159 +84,12 @@ check.quadrants(rrho_results,
                 quadrants_to_check = NULL, 
                 outdir = "./neurons/all_neurons/RRHO")
 
-# graph count of genes per quadrant (RRHO2)
-gene_lists <- rrho_results$GLU[grep("^genelist", names(rrho_results$GLU))]
-
-overlap_df <- map_dfr(names(gene_lists), function(nm) {
-  overlap_name <- paste0("gene_list_overlap_", str_remove(nm, "genelist_"))
-  tibble(
-    list_id = str_remove(nm, "genelist_"),
-    overlap_length = length(gene_lists[[nm]][[overlap_name]])
-  )
-})
-
-ggplot(overlap_df, aes(x = reorder(list_id, -overlap_length), 
-                       y = overlap_length)) +
-  geom_point(size = 3) +
-  geom_text(aes(label = overlap_length), 
-            vjust = -1, 
-            size = 3) +
-  theme_classic() +
-  ylab('Number of genes per quadrant') +
-  xlab('') +
-  ggtitle('RRHO2 GLU quadrant results')
-
-
-ggsave('neurons/all_neurons/RRHO/GLU_RRHO2_number_gene_quad.png',
-       width = 5, height = 5)
-
-
-# graph count of genes per quadrant (RedRibbon)
-gene_lists <- rrho_results$GLU$RedRibbon.quads[names(rrho_results$GLU$RedRibbon.quads)]
-
-overlap_df <- map_dfr(names(gene_lists), function(nm) {
-  overlap_name <- paste(nm)
-  tibble(
-    list_id = overlap_name,
-    overlap_length = length(rrho_results$GLU$df[gene_lists[[overlap_name]]$positions,1])
-  )
-})
-
-ggplot(overlap_df, aes(x = reorder(list_id, -overlap_length), 
-                       y = overlap_length)) +
-  geom_point(size = 3) +
-  geom_text(aes(label = overlap_length), 
-            vjust = -1, 
-            size = 3) +
-  theme_classic() +
-  ylab('Number of genes per quadrant') +
-  xlab('') +
-  ggtitle('RedRibbon GLU quadrant results')
-
-ggsave('neurons/all_neurons/RRHO/GLU_RedRibbon_number_gene_quad.png',
-       width = 5, height = 5)
-
-
-#### Compare concordant genes to neuron cluster markers - GABA ####
-# cluster marker genes from updated_03script.R
-setwd(paste0(root.dir, "/DGE_CellTypes"))
-
-neuron.markers <- read.csv("./neurons/cluster_stats/neuron_clusterMarkers.csv")
-
-# check % overlaps with uu and dd gene lists for RRHO2
-100*(neuron.markers %>% 
-       filter(p_val_adj <= 0.05,
-              abs(specificity) >= 0.5) %>% 
-       pull(gene) %>% 
-       intersect(rrho_results$GABA$genelist_uu$gene_list_overlap_uu) %>% 
-       length())/length(rrho_results$GABA$genelist_uu$gene_list_overlap_uu)
-
-# [1] 
-
-100*(neuron.markers %>% 
-       filter(p_val_adj <= 0.05,
-              abs(specificity) >= 0.5) %>% 
-       pull(gene) %>% 
-       intersect(rrho_results$GABA$genelist_dd$gene_list_overlap_dd) %>% 
-       length())/length(rrho_results$GABA$genelist_dd$gene_list_overlap_dd)
-
-# [1] 
-
-# overlaps: % of marker genes in concordance (uu + dd) 
-# 
-
-# check % overlaps with uu and dd gene lists for RedRibbon 
-100*(neuron.markers %>% 
-       filter(p_val_adj <= 0.05,
-              abs(specificity) >= 0.5) %>% 
-       pull(gene) %>% 
-       intersect(rrho_results$GABA$df[rrho_results$GABA$RedRibbon.quads$upup$positions,1]) %>% 
-       length())/length(rrho_results$GABA$df[rrho_results$GABA$RedRibbon.quads$upup$positions,1])
-
-# [1] 
-
-100*(neuron.markers %>% 
-       filter(p_val_adj <= 0.05,
-              abs(specificity) >= 0.5) %>% 
-       pull(gene) %>% 
-       intersect(rrho_results$GABA$df[rrho_results$GABA$RedRibbon.quads$downdown$positions,1]) %>% 
-       length())/length(rrho_results$GABA$df[rrho_results$GABA$RedRibbon.quads$downdown$positions,1])
-
-# [1] 
-
-# overlaps: % of marker genes in concordance (uu + dd) 
-# 
-
-# graph count of genes per quadrant (RRHO2)
-gene_lists <- rrho_results$GABA[grep("^genelist", names(rrho_results$GABA))]
-
-overlap_df <- map_dfr(names(gene_lists), function(nm) {
-  overlap_name <- paste0("gene_list_overlap_", str_remove(nm, "genelist_"))
-  tibble(
-    list_id = str_remove(nm, "genelist_"),
-    overlap_length = length(gene_lists[[nm]][[overlap_name]])
-  )
-})
-
-ggplot(overlap_df, aes(x = reorder(list_id, -overlap_length), 
-                       y = overlap_length)) +
-  geom_point(size = 3) +
-  geom_text(aes(label = overlap_length), 
-            vjust = -1, 
-            size = 3) +
-  theme_classic() +
-  ylab('Number of genes per quadrant') +
-  xlab('') +
-  ggtitle('RRHO2 GABA quadrant results')
-
-
-ggsave('neurons/all_neurons/RRHO/GABA_RRHO2_number_gene_quad.png',
-       width = 5, height = 5)
-
-
-# graph count of genes per quadrant (RedRibbon)
-gene_lists <- rrho_results$GABA$RedRibbon.quads[names(rrho_results$GABA$RedRibbon.quads)]
-
-overlap_df <- map_dfr(names(gene_lists), function(nm) {
-  overlap_name <- paste(nm)
-  tibble(
-    list_id = overlap_name,
-    overlap_length = length(rrho_results$GABA$df[gene_lists[[overlap_name]]$positions,1])
-  )
-})
-
-ggplot(overlap_df, aes(x = reorder(list_id, -overlap_length), 
-                       y = overlap_length)) +
-  geom_point(size = 3) +
-  geom_text(aes(label = overlap_length), 
-            vjust = -1, 
-            size = 3) +
-  theme_classic() +
-  ylab('Number of genes per quadrant') +
-  xlab('') +
-  ggtitle('RedRibbon GABA quadrant results')
-
-ggsave('neurons/all_neurons/RRHO/GABA_RedRibbon_number_gene_quad.png',
-       width = 5, height = 5)
+  plot.overlaps(rrho_results,
+                neuron_clusterMarkers,
+                quadrants_to_check = NULL,
+                subtitle = "adj. p-value < 0.05; specificity > 0.5",
+                group.by = "cluster",
+                outdir = "./neurons/all_neurons/RRHO")
+  
 
 
