@@ -1,6 +1,6 @@
 # R-4.3.1, Seurat v4.4.0
 
-net.dir <- "/stor/work/Hofmann/All_projects/Mouse_poa_snseq"
+# net.dir <- "/stor/work/Hofmann/All_projects/Mouse_poa_snseq"
 root.dir <- "/stor/home/kmm7552/km_MousePOASnseq"
 setwd(paste0(root.dir, "/Scripts/km_cleanScripts/")) 
 set.seed(12345)
@@ -68,28 +68,35 @@ rrho_results <- get.RRHO(limma_results,
 # graph count of genes per quadrant
   plot.RRHO.counts(rrho_results, "./neurons/all_neurons/RRHO")
 
-#### Compare concordant genes to neuron cluster markers - GLU ####
+#### Compare quadrant genes to glut & gaba cluster markers ####
 # cluster marker genes from updated_03script.R
 setwd(paste0(root.dir, "/DGE_CellTypes"))
 
 neuron.markers <- read.csv("./neurons/cluster_stats/neuron_clusterMarkers.csv")
 
-# check % overlaps with uu and dd gene lists for RRHO2 & RedRibbon
+# check % overlaps with quad gene lists for RRHO2 & RedRibbon
 neuron.markers %>% 
   filter(p_val_adj <= 0.05, 
          abs(specificity) >= 0.5) -> neuron_clusterMarkers
 
 check.quadrants(rrho_results, 
                 neuron_clusterMarkers, 
-                quadrants_to_check = NULL, 
+                quadrants_to_check = NULL, # will try all quadrants 
                 outdir = "./neurons/all_neurons/RRHO")
 
   plot.overlaps(rrho_results,
                 neuron_clusterMarkers,
-                quadrants_to_check = NULL,
+                quadrants_to_check = NULL, # will try all quadrants 
                 subtitle = "adj. p-value < 0.05; specificity > 0.5",
                 group.by = "cluster",
                 outdir = "./neurons/all_neurons/RRHO")
   
 
+#### GO Enrichment Analysis genes by quadrant (glut & gaba) ####
+# note: GO terms are different for RedRibbon & RRHO2 gene lists. 
+# plots are NOT identical
+
+get.GOtop15.RRHO(rrho_results,
+                 quadrants_to_check = NULL, # will try all quadrants 
+                 outdir = "./neurons/all_neurons/RRHO/GO_enrich")
 

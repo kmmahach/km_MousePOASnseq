@@ -244,33 +244,6 @@ get.overlaps <- function(x) {
   
 }
 
-get.percent.overlap <- function(dat) {
-  
-  sapply(dat, \(x) {
-    
-    if(is.null(quadrants_to_check)) {
-      quadrants_to_check = unique(x$quadrant)
-    }
-    
-    overlap_pct = data.frame()
-    
-    for(quad in quadrants_to_check) {
-      x.quad = as.data.frame(x) %>% 
-        filter(quadrant == quad) 
-      
-      pct.overlap = 100 * length(intersect(gene_list_input, x.quad$genes)) / length(x.quad$genes)
-      
-      total = data.frame(quad, 
-                         pct.overlap, 
-                         total.genes = length(x.quad$genes))
-      overlap_pct = rbind(overlap_pct, total)
-    }
-    
-    return(as_named_list(overlap_pct))
-    
-  })
-}
-
 #### processing for DGE/RRHO ####
 prep.for.DGE <- function(list_of_SeuratObj,
                          assay = 'integrated',
@@ -904,12 +877,43 @@ check.quadrants <- function(rrho_results_list,
   }
   
   if(!is.vector(gene_list) & !is.character(gene_list)) {
-    gene_list_input = as.vector(gene_list$gene, mode = "character")
+    gene_list_input <- as.vector(gene_list$gene, mode = "character")
   } else {
-    gene_list_input = gene_list
+    gene_list_input <- gene_list
   }
   
+  if(is.null(quadrants_to_check)) {
+    quads_check <- NULL
+  }
+
   overlaps_list <- lapply(rrho_results_list, get.overlaps)
+  
+  get.percent.overlap <- function(dat) {
+    
+    sapply(dat, \(x) {
+      
+      overlap_pct = data.frame()
+      
+      if(is.null(quadrants_to_check)) {
+        quadrants_to_check <- unique(x$quadrant)
+      }
+      
+      for(quad in quadrants_to_check) {
+        x.quad = as.data.frame(x) %>% 
+          filter(quadrant == quad) 
+        
+        pct.overlap = 100 * length(intersect(gene_list_input, x.quad$genes)) / length(x.quad$genes)
+        
+        total = data.frame(quad, 
+                           pct.overlap, 
+                           total.genes = length(x.quad$genes))
+        overlap_pct = rbind(overlap_pct, total)
+      }
+      
+      return(as_named_list(overlap_pct))
+      
+    })
+  }
   
   overlaps_pct <- lapply(overlaps_list, get.percent.overlap)
   
@@ -1163,10 +1167,8 @@ get.GOtop15.RRHO <- function(rrho_results_list,
                           namelist(overlaps_list),
                           SIMPLIFY = FALSE)
   
-  for(i in seq_along(overlaps_list)) {
-    dat <- overlaps_list[[i]]
-    plot.go(dat)
-  }
+  invisible(lapply(overlaps_list, plot.go))
+
 }
 
 
