@@ -244,120 +244,346 @@ get.overlaps <- function(x) {
   
 }
 
+
+# to find best model for limma in iterative_model_gen (build complex models hierarchically)
+generate_main.effect_models <- function(factor_list, 
+                                        include.intercept = TRUE, 
+                                        include_null = TRUE) {
+  if (is.null(names(factor_list))) {
+    stop("factor_list must be a named list of factors")
+  }
+  
+  factor_names <- names(factor_list)
+  n <- length(factor_names)
+  
+  # generate subsets
+  subsets <- unlist(
+    lapply(1:n, function(k) {
+      combn(factor_names, k, simplify = FALSE)
+    }),
+    recursive = FALSE
+  )
+  
+  # formulas for each subset
+  formula_list <- lapply(subsets, function(s) {
+    if (include.intercept) {
+      reformulate(s, response = NULL)
+    } else {
+      reformulate(s, response = NULL, intercept = FALSE)
+    }
+  })
+  
+  if (include_null) {
+    formula_list <- c(list(as.formula("~1")), formula_list)
+  }
+  
+  model_matrices <- lapply(formula_list, function(fmla) {
+    model.matrix(fmla, data = as.data.frame(factor_list))
+  })
+  
+  names(model_matrices) <- vapply(
+    formula_list,
+    function(f) paste(deparse(f), collapse = ""),
+    character(1)
+  )
+  
+  return(model_matrices)
+}
+
+generate.interaction.models <- function(factor_list, 
+                                        chosen_factors = NULL,
+                                        include.intercept = TRUE,
+                                        max.interaction.order = NULL) {
+  if (is.null(names(factor_list))) {
+    stop("factor_list must be a named list of factors")
+  }
+  
+  if (is.null(chosen_factors)) {
+    chosen_factors <- names(factor_list)
+  }
+  
+  if (!all(chosen_factors %in% names(factor_list))) {
+    stop("Some chosen_factors are not in factor_list")
+  }
+  
+  if (is.null(max.interaction.order)) {
+    max.interaction.order <- length(chosen_factors)
+  }
+  
+  main_effects <- reformulate(chosen_factors, 
+                              intercept = include.intercept)
+  
+  # all possible interactions up to max order
+  interaction_terms <- unlist(
+    lapply(2:max.interaction.order, function(i) {
+      combn(chosen_factors, i, FUN = function(x) paste(x, collapse=":"))
+    })
+  )
+  
+  subsets <- unlist(
+    lapply(1:length(interaction_terms), function(i) {
+      combn(interaction_terms, i, simplify = FALSE)
+    }),
+    recursive = FALSE
+  )
+  
+  formula_list <- lapply(subsets, function(ints) {
+    rhs <- paste(c(chosen_factors, ints), collapse = " + ")
+    as.formula(paste("~", rhs))
+  })
+  
+  formula_list <- c(list(main_effects), formula_list)
+  model_matrices <- lapply(formula_list, function(fmla) {
+    model.matrix(fmla, data = as.data.frame(factor_list))
+  })
+  
+  names(model_matrices) <- vapply(
+    formula_list,
+    function(f) paste(deparse(f), collapse = ""),
+    character(1)
+  )
+  
+  return(model_matrices)
+}
+
+get.topModels <- function(out,
+                          top = 5,
+                          model_list) {
+  
+  sorted_model_counts <- sort(table(out$pref), 
+                              decreasing = TRUE)  # sort by frequency
+  
+  top_names <- names(sorted_model_counts[1:top])
+  top_counts  <- as.integer(sorted_model_counts[1:top])
+  
+  # Pull the corresponding model matrices
+  top_models <- model_list[top_names]
+  
+  # Combine into a summary table
+  top_model_summary <- data.frame(
+    model_formula = top_names,
+    times_selected = top_counts
+  )
+  
+  top_model_summary
+  
+}
+
 #### processing for DGE/RRHO ####
 prep.for.DGE <- function(list_of_SeuratObj,
                          assay = 'integrated',
                          SCTransformed = TRUE,
                          selection.method = 'vst',
                          pseudo_bulk = FALSE,
-                         group.by = NULL) {
+                         group.by = NULL,
+                         uniqueID = NULL) {
   
   if(!is.list(list_of_SeuratObj)) {
     list_of_SeuratObj <- as_named_list(list_of_SeuratObj)
   }
   
-  # find union of variable features across all objects
-  var_feats_list <- lapply(list_of_SeuratObj, \(x) {
-    suppressWarnings(FindVariableFeatures(x, assay = assay,
-                                          selection.method = selection.method)) -> x
-    VariableFeatures(x, assay = assay)
-  })
-  
-  union_feats <- unique(unlist(var_feats_list))
-  message("Union of variable features: ", length(union_feats), " genes")
-  
-  get.data <- \(x) {
+  if(pseudo_bulk) {
     
-    gene <- Seurat::Project(x)
-    cat(paste0("Subset is set to: ", gene, 
-               "; if this is not what you intended, set project.name to subset\n"))
-    
-    if (is.null(x@meta.data$Cell_ID)) {
-      x@meta.data$Cell_ID <- rownames(x@meta.data)
-    }
-    
-    full_join(rownames_to_column(data.frame(x@reductions$umap@cell.embeddings), "Cell_ID"), 
-              x@meta.data,
-              join_by("Cell_ID")) -> x.umap
-    
-    get_assay_mat <- function(seurat_obj, assay_name, slot_name = "scale.data") {
-      mat <- try(GetAssayData(seurat_obj, slot = slot_name, assay = assay_name), silent = TRUE)
-      if(inherits(mat, "try-error") || nrow(mat) == 0 || ncol(mat) == 0) {
-        message(paste0(slot_name, " slot empty or missing for assay '", assay_name, "', using 'data' slot instead"))
-        mat <- GetAssayData(seurat_obj, slot = "data", assay = assay_name)
+    if(!is.null(group.by)) {
+      message("checking categories from 'group.by' input")
+      
+      if(is.vector(group.by) && is.character(group.by)) {
+        group.by <- unique(group.by)
+        contains_bulk_group <- all(map_lgl(list_of_SeuratObj, ~ "bulk_group" %in% colnames(.x@meta.data)))
+
+        if (is.null(uniqueID) && !contains_bulk_group) {
+          list_of_SeuratObj <- lapply(list_of_SeuratObj, function(obj) { 
+            obj$bulk_group <- with(x@meta.data,
+                                   paste(group.by, sep = "_"))
+            return(obj)
+          }) 
+          uniqueID = "bulk_group"
+          
+        } else if(is.null(uniqueID) && contains_bulk_group) {
+          uniqueID = "bulk_group"
+          
+        } else {
+          uniqueID = uniqueID
+        }
+        
+      } else {
+        stop("input for 'group.by' must be a character vector of the groupings (usually metadata column(s))")
       }
-      return(mat)
+    } else {
+      stop("pseudo-bulk data requires at least one metadata column as 'group.by' input")
     }
     
-    # Normalized & scaled counts for differential expression
-    if (!SCTransformed) {
+    bulk.list <- lapply(list_of_SeuratObj, AggregateExpression,  
+                        assays = "RNA",
+                        slot = "counts",
+                        return.seurat = TRUE, 
+                        group.by = uniqueID,
+                        fun = "sum")
+    
+    bulk.list <- lapply(bulk.list, function(obj) {
+      obj$orig.ident <- colnames(obj)
+      obj@active.ident <- as.factor(obj$orig.ident)
+      return(obj)
+    })
+
+    if(length(bulk.list) > 1) {
+      # set project names and prepend to colnames
+      for(nm in names(bulk.list)) {
+        bulk.list[[nm]]@project.name <- nm
+      }
       
-      message("Normalizing and scaling RNA assay")
-      DefaultAssay(x) <- "RNA"
-      
-      x %>%
-        NormalizeData(assay = "RNA", 
-                      normalization.method = "LogNormalize", 
-                      scale.factor = 1e4, 
-                      verbose = FALSE) %>%
-        FindVariableFeatures(assay = "RNA", 
-                             verbose = FALSE) %>%
-        ScaleData(assay = "RNA", 
-                  verbose = FALSE) -> x
-      
-      norm_mat <- get_assay_mat(x, "RNA", "scale.data")
-      norm_counts <- norm_mat[rownames(norm_mat) %in% union_feats, , drop = FALSE]
+      bulk.matrices <- lapply(bulk.list, function(obj) {
+        prefix <- obj@project.name
+        mat <- obj@assays$RNA$counts
+        colnames(mat) <- paste(prefix, colnames(obj), sep = "_")
+        return(mat)
+      })
+      bulk.matrix <- do.call(cbind, bulk.matrices)
       
     } else {
-      
-      norm_mat <- get_assay_mat(x, "SCT", "scale.data")
-      norm_counts <- norm_mat[rownames(norm_mat) %in% union_feats, , drop = FALSE]
+      bulk.matrix <- bulk.list[[1]]@assays$RNA$counts
     }
     
-    # Raw counts from RNA assay data slot (un-normalized)
-    raw_mat <- get_assay_mat(x, "RNA", "data")
-    raw_counts <- raw_mat[rownames(raw_mat) %in% union_feats, , drop = FALSE]
     
-    # Keep cells consistent
-    common_cells <- intersect(colnames(norm_counts), x.umap$Cell_ID)
-    norm_counts <- norm_counts[, common_cells, drop = FALSE]
-    raw_counts <- raw_counts[, common_cells, drop = FALSE]
-    x.umap <- x.umap %>% filter(Cell_ID %in% common_cells)
+    make_pseudobulk_metadata <- function(pseudobulk_matrix) {
+      
+      meta_list <- lapply(names(list_of_SeuratObj), function(obj_name) {
+        obj <- list_of_SeuratObj[[obj_name]]
+        
+        # Unique combinations of the specified grouping columns
+        md <- obj@meta.data %>% 
+          distinct(across(all_of(group.by)))
+        
+        # Add object name
+        md$source_obj <- obj_name
+        
+        # Construct pseudobulk column names
+        grouping_key <- unique(obj$bulk_group)
+        md$pb_colname <- paste(obj_name, grouping_key, sep = "_")
+
+        md
+      })
+      
+      combined_meta <- do.call(rbind, meta_list)
+      
+      # Align to pseudobulk matrix column order
+      metadata <- combined_meta[match(colnames(pseudobulk_matrix), combined_meta$pb_colname), ]
+      
+      rownames(metadata) <- metadata$pb_colname
+      
+      # Reorder so pb_colname is the first column
+      metadata <- metadata[, c("pb_colname", group.by, "source_obj"), drop = FALSE]
+      
+      return(metadata)
+    }
     
-    # Reorder to match metadata cells
-    norm_counts <- norm_counts[, x.umap$Cell_ID, drop = FALSE]
-    raw_counts <- raw_counts[, x.umap$Cell_ID, drop = FALSE]
+    pb_metadata <- make_pseudobulk_metadata(bulk.matrix)
+    return(as_named_list(bulk.matrix, pb_metadata))
+
+  } else {
     
-    # pseudo-bulk averaging per subset if requested
-    if (pseudo_bulk && !is.null(group.by)) {
-      if (all(group.by %in% colnames(x.umap))) {
-        message("Performing pseudo-bulk averaging by groups: ", paste(group.by, collapse = ", "))
-        grouping <- apply(x.umap[, group.by, drop = FALSE], 1, paste, collapse = "_")
-        
-        norm_counts <- sapply(split(seq_len(ncol(norm_counts)), grouping), function(idx) {
-          Matrix::rowMeans(norm_counts[, idx, drop = FALSE])
-        }) %>% as.matrix()
-        
-        raw_counts <- sapply(split(seq_len(ncol(raw_counts)), grouping), function(idx) {
-          Matrix::rowMeans(raw_counts[, idx, drop = FALSE])
-        }) %>% as.matrix()
-        
-        x.umap <- data.frame(group = unique(grouping))
-        rownames(x.umap) <- x.umap$group
-      } else {
-        stop("One or more group.by columns not found in metadata")
+    # find union of variable features across all objects
+    var_feats_list <- lapply(list_of_SeuratObj, \(x) {
+      suppressWarnings(FindVariableFeatures(x, assay = assay,
+                                            selection.method = selection.method)) -> x
+      VariableFeatures(x, assay = assay)
+    })
+    
+    union_feats <- unique(unlist(var_feats_list))
+    message("Union of variable features: ", length(union_feats), " genes")
+    
+    get.data <- \(x) {
+      
+      gene <- Seurat::Project(x)
+      cat(paste0("Subset is set to: ", gene, 
+                 "; if this is not what you intended, set project.name to subset\n"))
+      
+      if (is.null(x@meta.data$Cell_ID)) {
+        x@meta.data$Cell_ID <- rownames(x@meta.data)
       }
+      
+      full_join(rownames_to_column(data.frame(x@reductions$umap@cell.embeddings), "Cell_ID"), 
+                x@meta.data,
+                join_by("Cell_ID")) -> x.umap
+      
+      get_assay_mat <- function(seurat_obj, assay_name, slot_name = "scale.data") {
+        mat <- try(GetAssayData(seurat_obj, slot = slot_name, assay = assay_name), silent = TRUE)
+        if(inherits(mat, "try-error") || nrow(mat) == 0 || ncol(mat) == 0) {
+          message(paste0(slot_name, " slot empty or missing for assay '", assay_name, "', using 'data' slot instead"))
+          mat <- GetAssayData(seurat_obj, slot = "data", assay = assay_name)
+        }
+        return(mat)
+      }
+      
+      # Normalized & scaled counts for differential expression
+      if (!SCTransformed) {
+        
+        message("Normalizing and scaling RNA assay")
+        DefaultAssay(x) <- "RNA"
+        
+        x %>%
+          NormalizeData(assay = "RNA", 
+                        normalization.method = "LogNormalize", 
+                        scale.factor = 1e4, 
+                        verbose = FALSE) %>%
+          FindVariableFeatures(assay = "RNA", 
+                               verbose = FALSE) %>%
+          ScaleData(assay = "RNA", 
+                    verbose = FALSE) -> x
+        
+        norm_mat <- get_assay_mat(x, "RNA", "scale.data")
+        norm_counts <- norm_mat[rownames(norm_mat) %in% union_feats, , drop = FALSE]
+        
+      } else {
+        
+        norm_mat <- get_assay_mat(x, "SCT", "scale.data")
+        norm_counts <- norm_mat[rownames(norm_mat) %in% union_feats, , drop = FALSE]
+      }
+      
+      # Raw counts from RNA assay data slot (un-normalized)
+      raw_mat <- get_assay_mat(x, "RNA", "data")
+      raw_counts <- raw_mat[rownames(raw_mat) %in% union_feats, , drop = FALSE]
+      
+      # Keep cells consistent
+      common_cells <- intersect(colnames(norm_counts), x.umap$Cell_ID)
+      norm_counts <- norm_counts[, common_cells, drop = FALSE]
+      raw_counts <- raw_counts[, common_cells, drop = FALSE]
+      x.umap <- x.umap %>% filter(Cell_ID %in% common_cells)
+      
+      # Reorder to match metadata cells
+      norm_counts <- norm_counts[, x.umap$Cell_ID, drop = FALSE]
+      raw_counts <- raw_counts[, x.umap$Cell_ID, drop = FALSE]
+      
+      # pseudo-bulk averaging per subset if requested
+      # if (all(group.by %in% colnames(x.umap))) {
+      #   message("Performing pseudo-bulk averaging by groups: ", paste(group.by, collapse = ", "))
+      #   grouping <- apply(x.umap[, group.by, drop = FALSE], 1, paste, collapse = "_")
+      #   
+      #   norm_counts <- sapply(split(seq_len(ncol(norm_counts)), grouping), function(idx) {
+      #     Matrix::rowMeans(norm_counts[, idx, drop = FALSE])
+      #   }) %>% as.matrix()
+      #   
+      #   raw_counts <- sapply(split(seq_len(ncol(raw_counts)), grouping), function(idx) {
+      #     Matrix::rowMeans(raw_counts[, idx, drop = FALSE])
+      #   }) %>% as.matrix()
+      #   
+      #   x.umap <- data.frame(group = unique(grouping))
+      #   rownames(x.umap) <- x.umap$group
+      # } else {
+      #   stop("One or more group.by columns not found in metadata")
+      # }
     }
     
     list(norm.counts = norm_counts, 
          raw.counts = raw_counts,
          meta.data = x.umap)
+    
+    results <- lapply(list_of_SeuratObj, get.data)
+    
+    return(list(results = results,
+                variable_features = union_feats))
   }
   
-  results <- lapply(list_of_SeuratObj, get.data)
-  
-  return(list(results = results,
-              variable_features = union_feats))
 }
 
 
@@ -491,6 +717,293 @@ run_limmatrend <- function(prep_results_list,
   }
   
   return(results_list)
+}
+
+
+iterative_model_gen <- function(factor_list,
+                                expression_data,
+                                top_n = 5,
+                                max_interaction_order = NULL,
+                                include_intercept = FALSE,
+                                include_null = FALSE) {
+  
+  if (is.null(names(factor_list))) stop("factor_list must be named")
+  
+  factor_names <- names(factor_list)
+  if (is.null(max_interaction_order)) max_interaction_order <- length(factor_names)
+  
+  # --- Step 0: generate all main-effects models ---
+  message("Generating main-effects models...")
+  all_main_designs <- generate_main.effect_models(factor_list,
+                                                  include.intercept = include_intercept,
+                                                  include_null = include_null)
+  
+  # --- Step 1: select top main-effects models ---
+  message("Selecting top main-effects models...")
+  output <- selectModel(expression_data, designlist = all_main_designs)
+  top_main <- get.topModels(output, top = top_n, model_list = all_main_designs)
+  
+  top_models_list <- all_main_designs[names(all_main_designs) %in% top_main$model_formula]
+  previous_top_names <- names(top_models_list)
+  
+  current_order <- 2
+  repeat {
+    if (current_order > max_interaction_order) break
+    
+    message("Generating hierarchical interactions of order ", current_order, " per top model...")
+    
+    new_designs <- list()
+    
+    # For each top model, generate next-order interactions independently
+    for (base_name in previous_top_names) {
+      base_vars <- all.vars(as.formula(base_name))
+      
+      # Only generate interactions if enough factors in this model
+      if (length(base_vars) < current_order) next
+      
+      interaction_combos <- combn(base_vars, current_order, simplify = FALSE)
+      
+      for (ints in interaction_combos) {
+        # Hierarchical model: include main effects + all lower-order interactions for these factors
+        lower_order_terms <- unlist(lapply(1:(length(ints)-1), function(k) {
+          combn(ints, k, FUN = function(x) paste(x, collapse=":"), simplify=TRUE)
+        }))
+        rhs <- unique(c(base_vars, lower_order_terms, paste(ints, collapse=":")))
+        
+        fmla <- as.formula(paste("~", paste(rhs, collapse=" + ")))
+        mat <- model.matrix(fmla, data = as.data.frame(factor_list))
+        
+        new_designs[[paste(deparse(fmla), collapse = "")]] <- mat
+      }
+    }
+    
+    if (length(new_designs) == 0) {
+      message("No new interactions possible — stopping iteration.")
+      break
+    }
+    
+    # Combine previous top models with new designs
+    combined_designs <- c(top_models_list, new_designs)
+    
+    # Run selectModel on combined designs
+    output <- selectModel(expression_data, designlist = combined_designs)
+    top_models <- get.topModels(output, top = top_n, model_list = combined_designs)
+    
+    top_models_list <- combined_designs[names(combined_designs) %in% top_models$model_formula]
+    current_top_names <- names(top_models_list)
+    
+    # Stop if top N did not change
+    if (all(current_top_names %in% previous_top_names) &&
+        all(previous_top_names %in% current_top_names)) {
+      message("Top models did not change — stopping iteration.")
+      break
+    }
+    
+    previous_top_names <- current_top_names
+    current_order <- current_order + 1
+  }
+  
+  return(list(
+    final_top_models = top_models_list,
+    final_summary = top_models
+  ))
+}
+
+
+make_cellMeans_matrix <- function(formula, 
+                                  factor_list, 
+                                  sample_names = NULL) {
+  
+  df <- as.data.frame(factor_list)
+  if(!is.null(names(factor_list)) && is.null(sample_names)) {
+    rownames(df) <- names(factor_list[[1]])
+  } else if(!is.null(sample_names)) {
+    rownames(df) <- sample_names
+  }
+  
+  # Build model matrix
+  mm <- model.matrix(formula, data = df,
+                     contrasts.arg = lapply(df, contrasts, contrasts = FALSE))
+  
+  # Extract factor levels for readability
+  # Remove intercept column if present
+  if ("(Intercept)" %in% colnames(mm)) {
+    mm <- mm[, -1, drop = FALSE]
+  }
+  
+  # Rename columns: factor.level concatenated with dots
+  new_names <- gsub(":", ".", colnames(mm))
+  colnames(mm) <- new_names
+  rownames(mm) <- 
+    
+    # Return
+    return(mm)
+}
+
+
+groups.for.contrasts <- function(design, 
+                                 factor_list, 
+                                 groupings) {
+  
+  stopifnot(all(sapply(factor_list, length) == nrow(design)))
+  if(!is.list(groupings)) {
+    groupings = list(groupings)
+  }
+  
+  col_labels <- apply(design, 2, function(col) {
+    idx <- which(col == 1)
+    if (length(idx) == 0) return(NA)
+    paste(sapply(factor_list, `[`, idx[1]), collapse = ".")
+  })
+  names(col_labels) <- colnames(design)
+  
+  result <- list()
+  
+  for (i in seq_along(groupings)) {
+    gset <- unlist(groupings[i])
+    idx <- match(gset, names(factor_list))
+    reduced_labels <- sapply(names(col_labels), function(cn) {
+      parts <- unlist(strsplit(col_labels[cn], "\\."))
+      paste(parts[idx], collapse = "_")
+    }, USE.NAMES = FALSE)
+    names(reduced_labels) <- colnames(design)
+    
+    # pool columns by unique label
+    out <- tapply(names(reduced_labels), reduced_labels, function(cols) {
+      paste(cols, collapse = " + ")
+    })
+    # out <- as_named_list(out)
+    
+    # nice names: all but last factor joined with _; last factor prefixed by _in_
+    nice_names <- sapply(names(out), function(n) {
+      parts <- unlist(strsplit(n, "_"))
+      if (length(parts) > 1) {
+        paste0(paste(parts[-length(parts)], collapse = "_"), "_in_", gset[length(gset)], parts[length(parts)])
+      } else {
+        n
+      }
+    })
+    
+    # keep only pooled groups (>1 column), print singletons
+    pooled <- sapply(out, function(x) length(unlist(strsplit(x, " \\+ "))) > 1)
+    if (any(!pooled)) {
+      cat("Removed singleton groups:\n")
+      print(out[!pooled])
+    }
+    
+    pooled_out <- out[pooled]
+    pooled_names <- nice_names[pooled]
+    
+    # create named list
+    result <- c(result, as_named_list(!!!rlang::set_names(as.list(pooled_out), pooled_names)))
+  }
+  
+  return(result)
+}
+
+filter_groups_for_design <- function(groups, 
+                                     design) {
+  filtered_groups <- list()
+  
+  for(gname in names(groups)) {
+    cols <- unlist(strsplit(groups[[gname]], " \\+ "))
+    cols <- intersect(cols, colnames(design))
+    if(length(cols) > 0) {
+      # keep the group with only valid columns
+      filtered_groups[[gname]] <- paste(cols, collapse = " + ")
+    } else {
+      message("Removing group due to missing columns in design: ", gname)
+    }
+  }
+  
+  return(filtered_groups)
+}
+
+
+make.contrast.list <- function(groups, 
+                               design, 
+                               sexes = c("Female", "Male"), 
+                               clusters = 0:9, 
+                               types = c("GLU","GABA")) {
+  contrast_list <- list()
+  
+  safe_group <- function(group_name) {
+    # keep only columns that exist in the design
+    cols <- unlist(strsplit(groups[[group_name]], " \\+ "))
+    cols <- intersect(cols, colnames(design))
+    paste(cols, collapse = " + ")
+  }
+  
+  # Status contrasts within each cluster and sex
+  for(sex in sexes) {
+    for(cluster in clusters) {
+      dom_name <- paste0(sex, "_Dom_in_cluster", cluster)
+      sub_name <- paste0(sex, "_Sub_in_cluster", cluster)
+      if(dom_name %in% names(groups) && sub_name %in% names(groups)) {
+        dom_cols <- safe_group(dom_name)
+        sub_cols <- safe_group(sub_name)
+        if(dom_cols != "" && sub_cols != "") {
+          contrast_name <- paste0(substr(sex,1,1), "dom_vs_sub_cluster", cluster)
+          contrast_list[[contrast_name]] <- paste0("(", dom_cols, ") - (", sub_cols, ")")
+        } else {
+          message("Skipping contrast due to missing columns: ", dom_name, " vs ", sub_name)
+        }
+      }
+    }
+  }
+  
+  # Status contrasts within each sex and neuron type
+  for(sex in sexes) {
+    for(type in types) {
+      dom_name <- paste0(sex, "_Dom_in_n_type", type)
+      sub_name <- paste0(sex, "_Sub_in_n_type", type)
+      if(dom_name %in% names(groups) && sub_name %in% names(groups)) {
+        dom_cols <- safe_group(dom_name)
+        sub_cols <- safe_group(sub_name)
+        if(dom_cols != "" && sub_cols != "") {
+          contrast_name <- paste0(substr(sex,1,1), "dom_vs_sub_n_type", type)
+          contrast_list[[contrast_name]] <- paste0("(", dom_cols, ") - (", sub_cols, ")")
+        } else {
+          message("Skipping contrast due to missing columns: ", dom_name, " vs ", sub_name)
+        }
+      }
+    }
+  }
+  
+  # Overall status contrasts per sex
+  for(sex in sexes) {
+    dom_name <- paste0(sex, "_in_statusDom")
+    sub_name <- paste0(sex, "_in_statusSub")
+    if(dom_name %in% names(groups) && sub_name %in% names(groups)) {
+      dom_cols <- safe_group(dom_name)
+      sub_cols <- safe_group(sub_name)
+      if(dom_cols != "" && sub_cols != "") {
+        contrast_name <- paste0(substr(sex,1,1), "dom_vs_sub_all")
+        contrast_list[[contrast_name]] <- paste0("(", dom_cols, ") - (", sub_cols, ")")
+      } else {
+        message("Skipping contrast due to missing columns: ", dom_name, " vs ", sub_name)
+      }
+    }
+  }
+  
+  return(contrast_list)
+}
+
+
+shuffle.factor.design <- function(factors_list) {
+  df <- as.data.frame(factors_list)
+  df$combo <- do.call(paste, c(df, sep = "_"))
+  shuffled_combos <- sample(df$combo)
+
+  new_df <- do.call(rbind, strsplit(shuffled_combos, "_"))
+  colnames(new_df) <- names(factors_list)
+  
+  shuffled_factors <- lapply(seq_along(factors_list), function(i) {
+    factor(new_df[, i], levels = levels(factors_list[[i]]))
+  })
+  names(shuffled_factors) <- names(factors_list)
+  
+  return(shuffled_factors)
 }
 
 # set colors to same scale for all plots
@@ -1243,3 +1756,52 @@ get.GOtop15.RRHO <- function(rrho_results_list,
 #   
 #   return(RedRibbon.quads)
 # }
+
+
+
+# make_topModel_cellmeans <- function(output_list, factor_list, sample_names = NULL) {
+#   # output_list: list returned by your iterative model selection function
+#   # factor_list: named list of factors used in the models
+#   # sample_names: optional vector of sample names (must match length of factors)
+#   
+#   # 1. Find top model (first entry in the last iteration of output_list)
+#   final_iteration <- tail(output_list, 1)[[1]]
+#   top_model_formula <- as.formula(final_iteration$model_formula[1])
+#   
+#   # 2. Convert factor_list to data.frame
+#   df <- as.data.frame(factor_list)
+#   if (!is.null(sample_names)) {
+#     if (length(sample_names) != nrow(df)) {
+#       stop("sample_names length must match number of rows in factor_list")
+#     }
+#     rownames(df) <- sample_names
+#   }
+#   
+#   # 3. Create cell-means design matrix
+#   X <- model.matrix(
+#     top_model_formula,
+#     data = df,
+#     contrasts.arg = lapply(df, contrasts, contrasts = FALSE)
+#   )
+#   
+#   return(list(
+#     formula = top_model_formula,
+#     design_matrix = X
+#   ))
+# }
+# 
+# 
+# create_grouped_design <- function(metadata, 
+#                                   factors, 
+#                                   include_intercept = FALSE) {
+#   
+#   # Combine the selected factors into a single group label
+#   metadata$group <- apply(metadata[, factors, drop = FALSE], 1, paste, collapse = "_")
+#   
+#   # Create cell-means design (1 column per group)
+#   formula_str <- if (include_intercept) "~ group" else "~ 0 + group"
+#   design <- model.matrix(as.formula(formula_str), data = metadata)
+#   
+#   return(list(design = design, group_labels = metadata$group))
+# }
+

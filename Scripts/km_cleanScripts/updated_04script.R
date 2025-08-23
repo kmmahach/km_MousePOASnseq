@@ -384,22 +384,22 @@ write_csv(neuron.genes.modglm,
 #### DGE with limma ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
 
-# # load if starting here: 
-# load(paste0(root.dir, "/HypoMap/data/integrated_seurat_withHypoMap_predictions.rda"))
-# 
-# # set idents
-# Idents(object = int.ldfs) <- "parent_id.broad.prob"
-# 
-# # subset to neurons
-# int.ldfs = subset(int.ldfs,
-#                   idents = c("C7-2: GABA", "C7-1: GLU"))
-# 
-# # subset genes
-# subset_genes <- c("Esr1",
-#                   "Ar",
-#                   "Pgr",
-#                   "Nr3c1",
-#                   "Nr3c2")
+# load if starting here:
+load(paste0(root.dir, "/HypoMap/data/integrated_seurat_withHypoMap_predictions.rda"))
+
+# set idents
+Idents(object = int.ldfs) <- "parent_id.broad.prob"
+
+# subset to neurons
+int.ldfs = subset(int.ldfs,
+                  idents = c("C7-2: GABA", "C7-1: GLU"))
+
+# subset genes
+subset_genes <- c("Esr1",
+                  "Ar",
+                  "Pgr",
+                  "Nr3c1",
+                  "Nr3c2")
 
 l.dfs <- subset_by_gene(int.ldfs, 
                         subset_genes, 
