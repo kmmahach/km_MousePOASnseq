@@ -1006,6 +1006,108 @@ shuffle.factor.design <- function(factors_list) {
   return(shuffled_factors)
 }
 
+# volcano plot function
+volcano.plot <- function(results_list,
+                         compare.across = status,
+                         outdir = getwd()) {
+  
+  contrasts <- namelist(results_list)
+  
+  plot.volcano <- function(x, y) {
+    contrast = y
+    suffix <- sub(".*sub_?", "", y)
+    
+    # set positive/negative
+    up <- unlist(strsplit(contrast[[1]], "_vs_"))[1]  # first part
+    down <- unlist(strsplit(contrast[[1]], "_vs_"))[2] 
+    
+    
+    if(grepl(compare.across[1], up, ignore.case = TRUE)) {
+      up = compare.across[1]
+      down = compare.across[2]
+    } else {
+      up = compare.across[2]
+      down = compare.across[1]
+    }
+    
+    tt <- distinct(x)
+    
+    dc <- tt %>% 
+      mutate(contrast = contrast) %>% 
+      mutate(log10 = ifelse(P.Value==0, 4, -log10(P.Value))) %>% 
+      mutate(P.Value = ifelse(P.Value==0, 0.0001, P.Value)) %>% 
+      mutate(rank = logFC * log10) %>% 
+      mutate(diffexpressed = ifelse(logFC > 0 & P.Value < 0.05, "UP", 
+                                    ifelse(logFC < -0 & P.Value < 0.05, "DOWN", "NO")))
+    
+    max.x <- round(max(dc$logFC) * 2) / 2
+    min.x <- round(min(dc$logFC) * 2) / 2
+    
+    upgene_labels <- dc %>% slice_max(order_by = rank, n = 15)
+    downgene_labels <- dc %>% slice_max(order_by = -rank, n = 15)
+    
+    dc %>% 
+      ggplot(aes(x = logFC,
+                 y = log10,
+                 color = diffexpressed)) +
+      geom_point(alpha = 0.25, size = 3.5) +
+      scale_color_manual(values = c("#408D8E", "grey", "#f94449")) +
+      xlim(c(min.x, max.x)) +
+      ylim(0,4) +
+      geom_hline(yintercept = 1.301,lty=4,col="grey",lwd=0.8) +
+      geom_text_repel(data = upgene_labels,
+                      aes(x = logFC, 
+                          y = -log10(P.Value),
+                          label = gene, 
+                          size = 13), 
+                      color = "black",  
+                      hjust = -.9, 
+                      vjust =.8,
+                      max.overlaps = 20) +
+      geom_text_repel(data = downgene_labels, 
+                      aes(x = logFC, 
+                          y = -log10(P.Value),
+                          label = gene, 
+                          size =13), 
+                      color = "black",  
+                      vjust = 1.15, 
+                      max.overlaps = 20) +
+      labs(x = "log2 Fold Change",
+           y = bquote(~-Log[10]~italic(eFDR))) +
+      theme_bw() +
+      annotate(geom = "text", x = 2, y = .5, 
+               label = paste0(sprintf("\u2191 \u2191"), up), 
+               fontface = "bold",
+               color = "black", size = 8) +
+      annotate(geom = "text", x = -2, y =.5, 
+               label = paste0(sprintf("\u2191 \u2191"), down), 
+               fontface = "bold", 
+               color = "black", size = 8) +
+      scale_x_continuous(limits = c(min.x, max.x),
+                         breaks = seq(min.x, max.x, 0.5)) +
+      theme(axis.text.x = element_text(vjust = 1,size = 15),
+            axis.text.y = element_text(hjust = 0.5,size = 20),
+            axis.text = element_text(color="#3C3C3C",size = 20),
+            axis.title = element_text(size = 20),   
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            legend.position = "none",
+            strip.background = element_blank(),
+            strip.text.x = element_text(size = 20),
+            text = element_text(size = 25)) +
+      ggtitle(contrast)
+    
+    cat("saving volcano plot for", contrast, "\n")
+    
+    ggsave(filename = paste0(paste(outdir, suffix, contrast, sep = "/"), 
+                             "_volcano_plot.png"),
+           width = 40, height = 35, units = "cm", dpi = 600)
+    
+  }
+  
+  map2( results_list, contrasts, ~ {plot.volcano(.x, .y)} )
+}
+
 # set colors to same scale for all plots
 ggRedRibbon.rrho.scale <- function (self, 
                                     n = NULL, 
@@ -1294,11 +1396,17 @@ get.RRHO <- function(results_list,
     }
     
     left_df  <- data.frame(gene = rownames(left_df_raw),
-                           value = -log10(left_df_raw$P.Value) * sign(left_df_raw$t) * left_sign,
+                           value = left_df_raw$logFC * left_sign,
+                           # value = -log10(left_df_raw$P.Value) * left_df_raw$logFC * left_sign,
+                           # value = left_df_raw$t * left_sign,
+                           # value = -log10(left_df_raw$P.Value) * sign(left_df_raw$t) * left_sign,
                            stringsAsFactors = FALSE)
     
     right_df <- data.frame(gene = rownames(right_df_raw),
-                           value = -log10(right_df_raw$P.Value) * sign(right_df_raw$t) * right_sign,
+                           value = right_df_raw$logFC * right_sign,
+                           # value = -log10(right_df_raw$P.Value) * right_df_raw$logFC * right_sign,
+                           # value = right_df_raw$t * right_sign,
+                           # value = -log10(right_df_raw$P.Value) * sign(right_df_raw$t) * right_sign,
                            stringsAsFactors = FALSE)
     
     # create RRHO2 object

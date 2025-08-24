@@ -413,14 +413,6 @@ dge_data <- prep.for.DGE(l.dfs,
                          SCTransformed = TRUE, 
                          assay = 'integrated')
 
-# # pseudo-bulk expr by sample
-# dge_data_bulk <- prep.for.DGE(l.dfs,
-#                               selection.method = "vst",
-#                               SCTransformed = TRUE,
-#                               pseudo_bulk = TRUE,
-#                               group.by = c("indiv_genotype", "orig.ident")
-
-
 # get results and graph p-values
 limma_results <- run_limmatrend(dge_data$results, "./neurons/neuroendocrine_genes/limma_trend")
 

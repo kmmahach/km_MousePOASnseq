@@ -46,21 +46,6 @@ MSCneurons.bulk <- prep.for.DGE(sub.MSCneurons,
                                              "seurat_clusters"),
                                 uniqueID = "bulk_group")
 
-# if desired to combine Status x Sex to speed up model selection
-# apply(MSCneurons.bulk$pb_metadata[, c("Sex", "Status"), drop = FALSE], 
-#       1, paste, collapse = "_") -> MSCneurons.bulk$pb_metadata$Sex_Status
-
-# MSCneurons.bulk$pb_metadata$Sex %>% 
-#   factor() -> sex
-# 
-# MSCneurons.bulk$pb_metadata$Status %>% 
-#   factor() -> status
-# 
-# MSCneurons.bulk$pb_metadata$source_obj %>% 
-#   factor() -> neuron.type
-# 
-# MSCneurons.bulk$pb_metadata$seurat_clusters %>% 
-#   factor() -> neuron.cluster
 
 d = apply(MSCneurons.bulk$bulk.matrix, 2, as.numeric)
 dim(d)
@@ -79,8 +64,6 @@ dim(dge.dl)
 # [1]  6112 232
 
 #### Choose best model for differential expression ####
-# MSCneurons.bulk$pb_metadata$seurat_clusters = 
-#   MSCneurons.bulk$pb_metadata$seurat_clusters %>% as.character()
 
 MSCneurons.bulk$pb_metadata <- lapply(MSCneurons.bulk$pb_metadata, \(x) factor(x))
 dge.dl$samples <- append(dge.dl$samples, MSCneurons.bulk$pb_metadata)
@@ -185,16 +168,54 @@ for(i in seq_along(efit.dl$p.value)){
 
 
 # save everything
-saveRDS(efit.dl, paste0(root.dir, "/DGE_CellTypes/neurons/all_neurons/limma_perm/efit.limma_perm.neurons.RDS"))
-saveRDS(limma_list, paste0(root.dir, "/DGE_CellTypes/neurons/all_neurons/limma_perm/limma_list.neurons.RDS"))
-saveRDS(contrast_list, paste0(root.dir, "/DGE_CellTypes/neurons/all_neurons/limma_perm/contrast_list1.neurons.RDS"))
-
 save(efit.dl, limma_list, contrast_list, 
-     file = paste0(root.dir, "/DGE_CellTypes/neurons/all_neurons/limma_perm/limma_perm_results1.rda"))
+     file = paste0(root.dir, "/DGE_CellTypes/neurons/all_neurons/limma_perm/limma_perm_results.rda"))
 
 # the big one, in case we want to look at distributions later... 
 save(p.dl.rand, t.dl.rand, 
-     file = paste0(net.dir, "/km_limmaPerm/10kPerm_limmaNeurons_randPvalsTvals.rda"),
+     file = paste0(net.dir, "/KM_limmaPerm/10kPerm_limmaNeurons_randPvalsTvals.rda"),
      compress = "xz")
 
+# volcano plots
+sex = c("Male", "Female")
+status = c("Dom", "Sub")
 
+  volcano.plot(limma_list,
+               outdir = paste0(root.dir, "/DGE_CellTypes/neurons/all_neurons/limma_perm"))
+
+
+#### RRHO on limma permutation results #### 
+setwd(paste0(root.dir, "/DGE_CellTypes/")) 
+
+# Reformat for RRHO
+suffixes <- sub(".*sub_?", "", names(limma_list))
+limma_list <- split(limma_list, suffixes)
+
+limma_list <- lapply(limma_list, function(sublist) {
+  newnames <- vapply(names(sublist), function(nm) {
+    if (grepl("^F", nm)) {
+      "ttFemale_Dom_vs_Female_Sub"
+    } else if (grepl("^M", nm)) {
+      "ttMale_Dom_vs_Male_Sub"
+    } else {
+      nm  # fallback if it doesn't match
+    }
+  }, character(1))
+  
+  names(sublist) <- newnames
+  sublist
+})
+
+
+rrho_results <- get.RRHO(limma_list,
+                         group.by = sex,
+                         compare.across = status,
+                         # new.max.log = max.log.scale,
+                         outdir = "./neurons/all_neurons/limma_perm")
+
+  save(rrho_results, file = "./neurons/all_neurons/limma_perm/rrho_results.rda")
+  
+
+
+  
+  
