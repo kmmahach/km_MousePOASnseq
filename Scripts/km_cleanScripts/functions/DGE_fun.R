@@ -1043,8 +1043,14 @@ volcano.plot <- function(results_list,
     max.x <- round(max(dc$logFC) * 2) / 2
     min.x <- round(min(dc$logFC) * 2) / 2
     
-    upgene_labels <- dc %>% slice_max(order_by = rank, n = 15)
-    downgene_labels <- dc %>% slice_max(order_by = -rank, n = 15)
+    if(max.x > 10 | min.x < -10) {
+      breaks = seq(min.x, max.x, 2)
+    } else {
+      breaks = seq(min.x, max.x, 0.5)
+    }
+    
+    upgene_labels <- dc %>% slice_max(order_by = rank, n = 20)
+    downgene_labels <- dc %>% slice_max(order_by = -rank, n = 20)
     
     dc %>% 
       ggplot(aes(x = logFC,
@@ -1054,7 +1060,10 @@ volcano.plot <- function(results_list,
       scale_color_manual(values = c("#408D8E", "grey", "#f94449")) +
       xlim(c(min.x, max.x)) +
       ylim(0,4) +
-      geom_hline(yintercept = 1.301,lty=4,col="grey",lwd=0.8) +
+      geom_hline(yintercept = 1.301, 
+                 lty=4,
+                 col="grey",
+                 lwd=0.8) +
       geom_text_repel(data = upgene_labels,
                       aes(x = logFC, 
                           y = -log10(P.Value),
@@ -1063,7 +1072,7 @@ volcano.plot <- function(results_list,
                       color = "black",  
                       hjust = -.9, 
                       vjust =.8,
-                      max.overlaps = 20) +
+                      max.overlaps = Inf) +
       geom_text_repel(data = downgene_labels, 
                       aes(x = logFC, 
                           y = -log10(P.Value),
@@ -1071,20 +1080,20 @@ volcano.plot <- function(results_list,
                           size =13), 
                       color = "black",  
                       vjust = 1.15, 
-                      max.overlaps = 20) +
+                      max.overlaps = Inf) +
       labs(x = "log2 Fold Change",
            y = bquote(~-Log[10]~italic(eFDR))) +
       theme_bw() +
-      annotate(geom = "text", x = 2, y = .5, 
+      annotate(geom = "text", x = 6, y = .5, 
                label = paste0(sprintf("\u2191 \u2191"), up), 
                fontface = "bold",
                color = "black", size = 8) +
-      annotate(geom = "text", x = -2, y =.5, 
+      annotate(geom = "text", x = -6, y = .5, 
                label = paste0(sprintf("\u2191 \u2191"), down), 
                fontface = "bold", 
                color = "black", size = 8) +
       scale_x_continuous(limits = c(min.x, max.x),
-                         breaks = seq(min.x, max.x, 0.5)) +
+                         breaks = breaks) +
       theme(axis.text.x = element_text(vjust = 1,size = 15),
             axis.text.y = element_text(hjust = 0.5,size = 20),
             axis.text = element_text(color="#3C3C3C",size = 20),

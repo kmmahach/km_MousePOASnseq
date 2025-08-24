@@ -95,7 +95,7 @@ dropped
 # if none, keep using 'design'
 
 # limma-voom
-v.dl = voom(dge.dl$counts, design_clean, plot = T)
+v.dl = voom(dge.dl, design, plot = T)
 vfit.dl = lmFit(v.dl, design)
 
 categories <- colnames(design)
