@@ -920,8 +920,54 @@ filter_groups_for_design <- function(groups,
 }
 
 
+get.neuron.proportions <- function(seurat_obj, 
+                                   donor_col = "id",
+                                   sex_col = "Sex",
+                                   rank_col = "Status",
+                                   cluster_col = "seurat_clusters",
+                                   celltype_col = "parent_id.broad") {
+  
+  meta <- seurat_obj@meta.data %>%
+    dplyr::select(all_of(c(donor_col, sex_col, rank_col, cluster_col, celltype_col)))
+  
+  # get proportions per individual
+  donor_props <- meta %>%
+    count(!!sym(donor_col), !!sym(sex_col), !!sym(rank_col),
+          !!sym(cluster_col), !!sym(celltype_col)) %>%
+    group_by(!!sym(donor_col), !!sym(sex_col), !!sym(rank_col)) %>%
+    mutate(total_cells = sum(n),
+           prop = n / total_cells) %>%
+    ungroup()
+  
+  cluster_props <- donor_props %>%   
+    group_by(!!sym(donor_col), !!sym(sex_col), !!sym(rank_col), !!sym(cluster_col)) %>% 
+    summarise(cluster_prop = mean(sum(n)/total_cells), .groups = "drop") 
+  
+  # avg by group
+  donor_avg <- donor_props %>%
+    group_by(!!sym(sex_col), !!sym(rank_col), !!sym(cluster_col), !!sym(celltype_col)) %>%
+    summarise(mean_prop = mean(prop, na.rm = TRUE), .groups = "drop") 
+  
+  cluster_avg <- cluster_props %>%   
+    group_by(!!sym(sex_col), !!sym(rank_col), !!sym(cluster_col)) %>% 
+    summarise(mean_cluster_prop = mean(cluster_prop), .groups = "drop") 
+  
+  averages <- left_join(donor_avg, cluster_avg, 
+                        join_by(!!sym(sex_col), !!sym(rank_col), !!sym(cluster_col))) %>% 
+    mutate(prop_in_cluster = mean_prop/mean_cluster_prop) %>% 
+    mutate(group = paste0("sex", Sex, 
+                          ".status", Status, 
+                          ".cluster", seurat_clusters, 
+                          ".n_type", sub(".*: ", "", parent_id.broad))) %>% 
+    column_to_rownames(var = "group")
+  
+  return(averages)
+}
+
+
 make.contrast.list <- function(groups, 
                                design, 
+                               weights,
                                sexes = c("Female", "Male"), 
                                clusters = 0:9, 
                                types = c("GLU","GABA")) {
@@ -931,7 +977,15 @@ make.contrast.list <- function(groups,
     # keep only columns that exist in the design
     cols <- unlist(strsplit(groups[[group_name]], " \\+ "))
     cols <- intersect(cols, colnames(design))
-    paste(cols, collapse = " + ")
+    newcols <- vector()
+    
+    for(col in cols) {
+      weight <- weights[col, ]
+      newcols[col] <- paste(col, weight, sep = "*")
+      # cols <- paste(cols, collapse = "")
+    }
+    newcols <- paste0("(", paste(newcols, collapse = " + "), ")/", sum(weights[cols,]))
+    return(newcols)
   }
   
   # Status contrasts within each cluster and sex
@@ -944,7 +998,7 @@ make.contrast.list <- function(groups,
         sub_cols <- safe_group(sub_name)
         if(dom_cols != "" && sub_cols != "") {
           contrast_name <- paste0(substr(sex,1,1), "dom_vs_sub_cluster", cluster)
-          contrast_list[[contrast_name]] <- paste0("(", dom_cols, ") - (", sub_cols, ")")
+          contrast_list[[contrast_name]] <- paste0(dom_cols, " - ", sub_cols)
         } else {
           message("Skipping contrast due to missing columns: ", dom_name, " vs ", sub_name)
         }
@@ -962,7 +1016,7 @@ make.contrast.list <- function(groups,
         sub_cols <- safe_group(sub_name)
         if(dom_cols != "" && sub_cols != "") {
           contrast_name <- paste0(substr(sex,1,1), "dom_vs_sub_n_type", type)
-          contrast_list[[contrast_name]] <- paste0("(", dom_cols, ") - (", sub_cols, ")")
+          contrast_list[[contrast_name]] <- paste0(dom_cols, " - ", sub_cols)
         } else {
           message("Skipping contrast due to missing columns: ", dom_name, " vs ", sub_name)
         }
@@ -979,7 +1033,7 @@ make.contrast.list <- function(groups,
       sub_cols <- safe_group(sub_name)
       if(dom_cols != "" && sub_cols != "") {
         contrast_name <- paste0(substr(sex,1,1), "dom_vs_sub_all")
-        contrast_list[[contrast_name]] <- paste0("(", dom_cols, ") - (", sub_cols, ")")
+        contrast_list[[contrast_name]] <- paste0(dom_cols, " - ", sub_cols)
       } else {
         message("Skipping contrast due to missing columns: ", dom_name, " vs ", sub_name)
       }

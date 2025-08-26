@@ -27,6 +27,7 @@ MSCneurons.reclust$bulk_group <- with(MSCneurons.reclust@meta.data,
                                             paste("cluster", seurat_clusters, sep = "_"), sep = "."))
 
 MSCneurons.reclust$bulk_group <- gsub(".data", "", MSCneurons.reclust$bulk_group)
+MSCneurons.reclust$id <- sub("\\.[^.]*$", "", MSCneurons.reclust$bulk_group)
 MSCneurons.reclust$Sex <- ifelse(grepl("female", MSCneurons.reclust$orig.ident), "Female", "Male")
 MSCneurons.reclust$Status <- ifelse(grepl("dom", MSCneurons.reclust$orig.ident), "Dom", "Sub")
 
@@ -45,7 +46,6 @@ MSCneurons.bulk <- prep.for.DGE(sub.MSCneurons,
                                              "indiv_genotype", 
                                              "seurat_clusters"),
                                 uniqueID = "bulk_group")
-
 
 d = apply(MSCneurons.bulk$bulk.matrix, 2, as.numeric)
 dim(d)
@@ -94,6 +94,22 @@ dropped <- setdiff(colnames(design), colnames(design_clean))
 dropped
 # if none, keep using 'design'
 
+# correlation of expression between neuron subtypes due to individual?
+MSCneurons.bulk$pb_metadata$id <- factor(paste(MSCneurons.bulk$pb_metadata$Sex, 
+                                               MSCneurons.bulk$pb_metadata$Status,
+                                               MSCneurons.bulk$pb_metadata$indiv_genotype,
+                                               sep = "_"))
+
+cor <- duplicateCorrelation(MSCneurons.bulk$bulk.matrix, design, 
+                            block = MSCneurons.bulk$pb_metadata$id)
+cor$consensus.correlation # check
+# [1] 0.0109614
+# not much - don't need to add random effect of id
+# but probably should add weights for neuron proportions in grouped contrasts
+neuron.proportions <- get.neuron.proportions(MSCneurons.reclust)
+weights = neuron.proportions %>% 
+  dplyr::select(mean_prop)
+
 # limma-voom
 v.dl = voom(dge.dl, design, plot = T)
 vfit.dl = lmFit(v.dl, design)
@@ -106,7 +122,10 @@ groups <- groups.for.contrasts(design,
                                     c("sex", "status", "n_type")))
 
 groups_filtered <- filter_groups_for_design(groups, design)
-contrast_list <- make.contrast.list(groups_filtered, design)
+contrast_list <- make.contrast.list(groups_filtered, 
+                                    weights = weights,
+                                    design = design)
+
 contrast.matrix <- makeContrasts(contrasts = contrast_list,
                                  levels = colnames(design))
 
@@ -146,7 +165,7 @@ for( g in 1 : R){
 }
 
 # perm pvals above/below observed values
-q.dl = matrix(0, nrow = nrow(p.dl.limma), ncol = ncol(p.dl.limma))
+# q.dl = matrix(0, nrow = nrow(p.dl.limma), ncol = ncol(p.dl.limma))
 
 q.dl <- Reduce(`+`, lapply(p.dl.rand, \(x) {
   (x < p.dl.limma) }  )) / R 
