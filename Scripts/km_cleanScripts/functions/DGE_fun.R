@@ -1138,11 +1138,11 @@ volcano.plot <- function(results_list,
       labs(x = "log2 Fold Change",
            y = bquote(~-Log[10]~italic(eFDR))) +
       theme_bw() +
-      annotate(geom = "text", x = 6, y = .5, 
+      annotate(geom = "text", x = 1.5, y = .5, 
                label = paste0(sprintf("\u2191 \u2191"), up), 
                fontface = "bold",
                color = "black", size = 8) +
-      annotate(geom = "text", x = -6, y = .5, 
+      annotate(geom = "text", x = -1.5, y = .5, 
                label = paste0(sprintf("\u2191 \u2191"), down), 
                fontface = "bold", 
                color = "black", size = 8) +
