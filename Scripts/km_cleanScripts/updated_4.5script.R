@@ -57,14 +57,13 @@ dim(d0) # check
 rownames(d0) <- rownames(MSCneurons.bulk$bulk.matrix)
 d0 <- calcNormFactors(d0)
 
-cutoff <- 200 # higher for snseq data due to sparsity 
+cutoff <- 225
 drop <- which(apply(cpm(d0), 1, max) < cutoff)
 dge.dl <- d0[-drop,]
 dim(dge.dl) 
-# [1]  6112 232
+# [1] 4961  232
 
 #### Choose best model for differential expression ####
-
 MSCneurons.bulk$pb_metadata <- lapply(MSCneurons.bulk$pb_metadata, \(x) factor(x))
 dge.dl$samples <- append(dge.dl$samples, MSCneurons.bulk$pb_metadata)
 # metadata <- as.data.frame(MSCneurons.bulk$pb_metadata)
@@ -139,14 +138,12 @@ p.dl.limma = efit.dl[["p.value"]]
 R = 10000
 set.seed(12345)
 
-# to store p-values in
+# to store p-values/t-values in
 p.dl.rand = vector('list', length = R)
-
-# to store "t" values (coefficients)
 t.dl.rand = vector('list', length = R)
 
-for( g in 1 : R){
-  print(paste("Starting on Permutation", g))
+for(g in 1:R) {
+  cat("Starting on Permutation", g, "\n")
   
   # Randomize the traits
   shuffled_factors <- shuffle.factor.design(factor_list)
@@ -161,7 +158,7 @@ for( g in 1 : R){
   vfit.dl.rand2 <- contrasts.fit(vfit.dl.rand, contrast.matrix)
   efit.dl.rand = eBayes(vfit.dl.rand2)
   p.dl.rand[[g]] = efit.dl.rand[["p.value"]]
-  t.dl.rand[[g]] = efit.dl.rand[["t"]] # maybe overkill? use to compare to p
+  t.dl.rand[[g]] = efit.dl.rand[["t"]]
 }
 
 # perm pvals above/below observed values
@@ -190,10 +187,16 @@ for(i in seq_along(efit.dl$p.value)){
 save(efit.dl, limma_list, contrast_list, 
      file = paste0(root.dir, "/DGE_CellTypes/neurons/all_neurons/limma_perm/limma_perm_results.rda"))
 
-# the big one, in case we want to look at distributions later... 
+# the big one, in (case we want to look at distributions later... 
+p.dl.rand = lapply(p.dl.rand, as, "dgCMatrix")
+t.dl.rand = lapply(t.dl.rand, as, "dgCMatrix")
+
+
 save(p.dl.rand, t.dl.rand, 
      file = paste0(net.dir, "/KM_limmaPerm/10kPerm_limmaNeurons_randPvalsTvals.rda"),
      compress = "xz")
+
+  rm(p.dl.rand, t.dl.rand)
 
 # volcano plots
 sex = c("Male", "Female")

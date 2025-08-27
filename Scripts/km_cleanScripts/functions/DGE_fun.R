@@ -1115,9 +1115,9 @@ volcano.plot <- function(results_list,
       xlim(c(min.x, max.x)) +
       ylim(0,4) +
       geom_hline(yintercept = 1.301, 
-                 lty=4,
-                 col="grey",
-                 lwd=0.8) +
+                 lty = 4,
+                 col = "grey",
+                 lwd = 0.8) +
       geom_text_repel(data = upgene_labels,
                       aes(x = logFC, 
                           y = -log10(P.Value),
@@ -1131,7 +1131,7 @@ volcano.plot <- function(results_list,
                       aes(x = logFC, 
                           y = -log10(P.Value),
                           label = gene, 
-                          size =13), 
+                          size = 13), 
                       color = "black",  
                       vjust = 1.15, 
                       max.overlaps = Inf) +
@@ -1459,17 +1459,17 @@ get.RRHO <- function(results_list,
     }
     
     left_df  <- data.frame(gene = rownames(left_df_raw),
-                           value = left_df_raw$logFC * left_sign,
+                           # value = left_df_raw$logFC * left_sign,
                            # value = -log10(left_df_raw$P.Value) * left_df_raw$logFC * left_sign,
                            # value = left_df_raw$t * left_sign,
-                           # value = -log10(left_df_raw$P.Value) * sign(left_df_raw$t) * left_sign,
+                           value = -log10(left_df_raw$P.Value) * sign(left_df_raw$t) * left_sign,
                            stringsAsFactors = FALSE)
     
     right_df <- data.frame(gene = rownames(right_df_raw),
-                           value = right_df_raw$logFC * right_sign,
+                           # value = right_df_raw$logFC * right_sign,
                            # value = -log10(right_df_raw$P.Value) * right_df_raw$logFC * right_sign,
                            # value = right_df_raw$t * right_sign,
-                           # value = -log10(right_df_raw$P.Value) * sign(right_df_raw$t) * right_sign,
+                           value = -log10(right_df_raw$P.Value) * sign(right_df_raw$t) * right_sign,
                            stringsAsFactors = FALSE)
     
     # create RRHO2 object
