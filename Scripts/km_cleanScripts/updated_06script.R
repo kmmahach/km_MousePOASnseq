@@ -184,3 +184,183 @@ ggsave('neurons/neuropeptides/pctNeurons_exprTop50Neuropeptides_by_indiv_genotyp
        height = 5, width = 15)
 
 
+#### DGE across clusters - neuropeptides ####
+setwd(paste0(root.dir, "/DGE_CellTypes"))
+load("./neurons/all_neurons/limma_perm/limma_perm_results.rda") # from updated_4.5script.R
+
+
+subset_by_sex <- function(limma_list,
+                          subset_genes = top25) {
+  
+  genes <- subset_genes$gene
+  
+  sublist <- lapply(limma_list, \(lst) {
+    lst <- subset(lst, lst$gene %in% genes)
+    }
+  )
+  
+  Females <- subset(sublist, grepl("^[F]", names(sublist))==TRUE)  
+  Males <- subset(sublist, grepl("^[M]", names(sublist))==TRUE)  
+  
+  newlist <- as_named_list(Females, Males)
+  
+  np_DGE <- lapply(newlist, \(x) {
+    x <- bind_rows(x, .id = "contrast") %>% 
+      left_join(subset_genes, 
+                by = 'gene') %>% 
+      mutate(logFC = ifelse(P.Value < 0.05, logFC, 0)) %>% 
+      mutate(contrast = sub(".*_", "", contrast))
+    }
+  ) 
+  return(np_DGE)
+}
+
+np_DGE <- subset_by_sex(limma_list) %>% 
+  bind_rows(., .id = "sex") %>% 
+  mutate(group = ifelse(logFC > 0, "Dom", "Sub"))
+
+
+ggplot(np_DGE, aes(x = reorder(gene, -cell_count), 
+                   y = contrast,
+                   fill = logFC)) +
+  labs(x = "top 25 expressed neuropeptides",
+       y = "neuronal subgroup") +
+  geom_tile(color = "grey90") + 
+  scale_fill_gradient2(name = bquote(~italic(log[2]~FC))) +
+  ggnewscale::new_scale_fill() +
+  geom_tile(data = distinct(np_DGE, group, logFC),
+            aes(x = 1, y = 1, 
+                fill = group), 
+            alpha = 0) +
+  scale_fill_manual(name = paste0(sprintf("\u2191 \u2191"), " expr in"),
+                    values = c("Dom" = muted("blue"), 
+                               "Sub" = muted("red"))) +
+  guides(fill = guide_legend(override.aes = list(values = c(muted("blue"), 
+                                                            muted("red")),
+                                                 alpha = c(1,1), 
+                                                 shape = c(1,1)))) +
+  theme_classic() +
+  facet_wrap(~ sex) +
+  ggtitle("Differential Expression of Neuropeptides in Neuronal Nuclei") +
+  theme(plot.title = element_text(hjust = 0.5, size = 20),
+        strip.text = element_text(face = "bold", size = 15),
+        axis.text.x = element_text(angle = 45, 
+                                   vjust = 0.75,
+                                   face = "italic",
+                                   size = 10),
+        axis.text.y = element_text(size = 12),
+        axis.title = element_text(size = 15),
+        legend.title = element_text(size = 15,
+                                    face = "italic"),
+        legend.text = element_text(size = 12,
+                                   face = "bold"))
+
+ggsave('neurons/neuropeptides/DEGneuropeptides_byCluster.png',
+       width = 10, height = 5)
+
+
+# Oxt/Avp specifically - expression in pct of neurons by cluster
+sub.MSCneurons.reclust <- subset_by_gene(int.ldfs,
+                                         c("Oxt", "Avp"),
+                                         slot = "data",
+                                         min_count = 0.5)
+
+
+
+# get presence/absence (1/0) for neuropeptide.genes
+umap = data.frame(MSCneurons.reclust@reductions$umap@cell.embeddings) %>%
+  rownames_to_column('Cell_ID')
+
+metadata = data.frame(MSCneurons.reclust@meta.data) %>%
+  full_join(umap, by = "Cell_ID")
+
+sapply(
+  names(sub.MSCneurons.reclust), \(sub_name) {
+    all_cells = metadata$Cell_ID
+    as.integer(all_cells %in% sub.MSCneurons[[sub_name]]@meta.data$Cell_ID)
+  }
+) %>%
+  as.data.frame() %>%
+  mutate(Cell_ID = metadata$Cell_ID) -> bin_df
+
+select_neur = full_join(metadata, bin_df, by = "Cell_ID")
+
+sum_neur <- select_neur %>%
+  summarise(total.cells = n(),
+            across(all_of(names(sub.MSCneurons.reclust)),
+                   list(sum = ~ sum(.x),
+                        pct = ~ (sum(.x) / n()) * 100),
+                   .names = "{fn}_{.col}"),
+            .groups = "drop")
+
+
+# percent of neurons expr oxytocin per indiv/cluster
+select_neur %>%
+  group_by(orig.ident,
+           indiv_genotype,
+           seurat_clusters) %>%
+  summarise(total.cells = n(),
+            across(all_of(names(sub.MSCneurons.reclust)),
+                   list(sum = ~ sum(.x),
+                        pct = ~ (sum(.x) / n()) * 100),
+                   .names = "{fn}_{.col}"),
+            .groups = "drop") %>% 
+  pivot_longer(
+    cols = starts_with("pct_"),
+    names_to = "gene",
+    names_prefix = "pct_",
+    values_to = "percentage"
+  ) %>%
+  filter(gene %in% "Oxt") %>% 
+  ggplot(aes(x = seurat_clusters,
+             y = percentage,
+             color = orig.ident,
+             fill = orig.ident)) +
+  scale_color_manual(values = c("#f94449", "#408D8E", "#ff7d00", "#7e38b7"))+
+  geom_boxjitter(outlier.color = NA, jitter.shape = 21, jitter.color = NA,
+                 alpha = 0.4, jitter.size = 2, size = .8, errorbar.draw = TRUE,
+                 position = position_dodge(0.85)) +
+  scale_fill_manual(values = c("#f94449", "#408D8E", "#ff7d00", "#7e38b7"))+
+  theme_classic() +
+  xlab('cluster') + ylab('% of neurons') +
+  ylim(0,100) +
+  ggtitle('Percent neurons in each cluster expressing Oxt')
+
+ggsave('neurons/neuropeptides/pctNeurons_exprOXT_by_indiv_genotype.png',
+       height = 5, width = 9)
+
+# percent of neurons expr vasopressin per indiv/cluster
+select_neur %>%
+  group_by(orig.ident,
+           indiv_genotype,
+           seurat_clusters) %>%
+  summarise(total.cells = n(),
+            across(all_of(names(sub.MSCneurons.reclust)),
+                   list(sum = ~ sum(.x),
+                        pct = ~ (sum(.x) / n()) * 100),
+                   .names = "{fn}_{.col}"),
+            .groups = "drop") %>% 
+  pivot_longer(
+    cols = starts_with("pct_"),
+    names_to = "gene",
+    names_prefix = "pct_",
+    values_to = "percentage"
+  ) %>%
+  filter(gene %in% "Avp") %>% 
+  ggplot(aes(x = seurat_clusters,
+             y = percentage,
+             color = orig.ident,
+             fill = orig.ident)) +
+  scale_color_manual(values = c("#f94449", "#408D8E", "#ff7d00", "#7e38b7"))+
+  geom_boxjitter(outlier.color = NA, jitter.shape = 21, jitter.color = NA,
+                 alpha = 0.4, jitter.size = 2, size = .8, errorbar.draw = TRUE,
+                 position = position_dodge(0.85)) +
+  scale_fill_manual(values = c("#f94449", "#408D8E", "#ff7d00", "#7e38b7"))+
+  theme_classic() +
+  xlab('cluster') + ylab('% of neurons') +
+  ylim(0,100) +
+  ggtitle('Percent neurons in each cluster expressing Avp')
+
+ggsave('neurons/neuropeptides/pctNeurons_exprAVP_by_indiv_genotype.png',
+       height = 5, width = 9)
+
