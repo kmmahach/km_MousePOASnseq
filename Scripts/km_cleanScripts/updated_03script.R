@@ -49,33 +49,69 @@ Idents(object = MSCneurons.reclust) <- "seurat_clusters"
 
 # UMAPs - all neuron clusters
 MSCneurons.reclust %>%
-  DimPlot(label = TRUE) +
-  theme_classic() +
-  ggtitle('neuron.seurat.clusters')
+  DimPlot() +
+  ggtitle('Neuron Clusters') +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  NoAxes()
 
 ggsave('./neurons/UMAP/neurons.recluster.clusters.png',
-       height = 5, width = 6)
+       height = 6, width = 6)
 
 # broad cell types
 MSCneurons.reclust %>%
-  DimPlot(group.by = 'parent_id.broad.prob')+
+  DimPlot(group.by = 'parent_id.broad.prob') +
+  ggtitle('Excitatory vs. Inhibitory Neurons') +
+  scale_color_manual(values = c('#1b9e77',
+                                '#d95f02')) +
   theme_classic()
 
 ggsave('./neurons/UMAP/neurons.recluster.parent_id.broad.png',
        height = 5, width = 6)
 
-# sex/social status
+# specific sub-types
 MSCneurons.reclust %>%
-  DimPlot(group.by = 'orig.ident',
-          size = 3) +
+  DimPlot(group.by = 'predicted.prob') +
+  ggtitle('Neuron Subtypes') +
+  theme_classic()
+
+ggsave('./neurons/UMAP/neurons.recluster_predicted.prob.png',
+       height = 5, width = 11)
+
+# sex/social status
+# randomize overlay of points/make sure all are relatively visible
+MSCneurons.reclust@reductions$umap@cell.embeddings %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "Cell_ID") %>% 
+  left_join(data.frame(MSCneurons.reclust@meta.data) %>% 
+              dplyr::select(orig.ident, Cell_ID),
+            by = "Cell_ID") %>% 
+  mutate(orig.ident = sub("\\.data$", "", orig.ident)) -> umap
+
+umap = umap[sample(nrow(umap)),]
+rownames(umap) = seq(1:nrow(umap))
+
+
+ggplot(data = subset(umap, !orig.ident == "female.sub"),
+         aes(x = UMAP_1,
+             y = UMAP_2,
+             color = orig.ident)) +
+  geom_point(size = 0.3) +
+  # scale_color_manual(values = c("#f94449", "#408D8E", "#ff7d00", "#7e38b7")) +
+  geom_point(data = subset(umap, orig.ident == "female.sub"),
+             size = 0.3) +
   theme_classic() +
-  scale_color_manual(values = c("red",
-                                'cyan',
-                                'black',
-                                'green'))
+  labs(x = "UMAP_1",
+       y = "UMAP_2") +
+  guides(color = guide_legend(override.aes = 
+                                list(size = 3))) +
+  theme(legend.text = element_text(face = "bold"),
+        # axis.text = element_text(size = 10),
+        # axis.title = element_text(size = 11),
+        plot.margin = unit(c(0.5,0.5,1,0.5), "cm")
+        ) + NoAxes()
 
 ggsave('./neurons/UMAP/neurons.recluster.orig.ident.png',
-       height = 5, width = 7)
+       height = 5.5, width = 7)
 
 # social status
 MSCneurons.reclust %>%
@@ -118,7 +154,7 @@ DotPlot(MSCneurons.reclust,
   theme_classic()
 
 ggsave('./neurons/dom.genes.dotplot.png',
-       height = 5, width = 5)
+       height = 5, width = 6)
 
 # scaled counts of neurons in each cluster (as percent)
 # subset by select_clusters
@@ -176,15 +212,15 @@ sum_neur_indiv %>%
            as.numeric()) %>% 
   ggplot(aes(x = reorder(as.integer(seurat_clusters),
                          as.numeric(seurat_clusters)),
-             y = Percent,
+             y = Percent/100,
              color = orig.ident)) +
   geom_boxplot(width = 0,
                position = position_dodge(0.75),
-               size = 1) +
+               size = 1.5) +
   geom_point(position = position_dodge(0.75),
              aes(shape = indiv_genotype,
                  group = orig.ident),
-             size = 3)+
+             size = 4)+
   facet_grid(~seurat_clusters,
              scales = "free_x") +
   theme_classic() +
@@ -192,8 +228,10 @@ sum_neur_indiv %>%
   ylab("Percent of Neurons") +
   labs(color = "Group",
        shape = "Genotype") +
-  theme(legend.position = c(0.9, 0.75),
-        legend.key.size = unit(1, "cm"),
+  scale_y_continuous(labels = scales::percent,
+                     limits = c(0, 0.5)) +
+  theme(legend.position = c(0.93, 0.75),
+        legend.key.size = unit(0.75, "cm"),
         legend.text = element_text(size = 17),
         legend.title = element_text(size = 23),
         strip.text.x.top = element_blank(),
@@ -201,18 +239,16 @@ sum_neur_indiv %>%
         axis.title.x = element_text(size = 25),
         axis.text.y = element_text(size = 17),
         axis.title.y = element_text(size = 25)) +
-  scale_color_manual(values = c("#CC5500",
-                                "#FF6A00",
-                                "#0077CC",
-                                "#0095FF"),
-                     labels = c("Female Dom",
-                                "Female Sub",
-                                "Male Dom",
-                                "Male Sub"))
+  scale_color_manual(values = c("#f94449", "#408D8E", "#ff7d00", "#7e38b7"),
+                     # labels = c("Female Dom",
+                     #            "Female Sub",
+                     #            "Male Dom",
+                     #            "Male Sub")
+                     labels = sub("\\.data", "", unique(sum_neur_indiv$orig.ident)))
 
 
 ggsave('./neurons/clustersVorig.ident.neurons.recluster.genotype.scaled.png',
-       height = 8, width = 12)
+       height = 7, width = 20)
 
 #### Prep for stats ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
@@ -544,23 +580,27 @@ table_orig.idents_by_clusters <- MSCneurons.reclust@meta.data %>%
   ungroup() %>%
   mutate(total_cell_count = rowSums(.[c(2:ncol(.))])) %>%
   dplyr::select(c('orig.ident', 'total_cell_count', everything())) %>%
-  arrange(factor(orig.ident, levels = levels(MSCneurons.reclust@meta.data$orig.ident)))
+  arrange(factor(orig.ident, levels = levels(MSCneurons.reclust@meta.data$orig.ident))) %>% 
+  mutate(orig.ident = sub("\\.[^.]*$", "", orig.ident))
 
 # cluster by sample
 table_clusters_by_orig.idents <- MSCneurons.reclust@meta.data %>%
   dplyr::rename('cluster' = 'integrated_snn_res.0.4') %>%
   group_by(cluster, orig.ident) %>%
-  summarize(count = n()) %>%
+  summarize(count = n()) %>% 
+  mutate(orig.ident = sub("\\.[^.]*$", "", orig.ident)) %>% 
   spread(orig.ident, count, fill = 0) %>%
   ungroup() %>%
   mutate(total_cell_count = rowSums(.[c(2:ncol(.))])) %>%
   dplyr::select(c('cluster', 'total_cell_count', everything())) %>%
   arrange(factor(cluster, levels = levels(MSCneurons.reclust@meta.data$integrated_snn_res.0.4)))
+  
 
 # Percent of cells per cluster by sample
 MSCneurons.reclust@meta.data %>% 
   group_by(orig.ident) %>%
-  tally() -> temp_labels
+  tally() %>% 
+  mutate(orig.ident = sub("\\.[^.]*$", "", orig.ident)) -> temp_labels
 
 p1 <- table_orig.idents_by_clusters %>%
   dplyr::select(-c('total_cell_count')) %>%
@@ -647,9 +687,10 @@ ggsave('neurons/sample_composition_ClustersByPercent.png',
 # cells per cluster by orig.ident
 MSCneurons.reclust@meta.data %>%
   group_by(orig.ident) %>%
-  tally() -> temp_labels
+  tally() %>% 
+  mutate(orig.ident = sub("\\.[^.]*$", "", orig.ident)) -> temp_labels
 
-p1 <- table_orig.idents_by_clusters %>%
+p3 <- table_orig.idents_by_clusters %>%
   dplyr::select(-c('total_cell_count')) %>%
   reshape2::melt(id.vars = 'orig.ident') %>%
   ggplot(aes(orig.ident, value)) +
@@ -682,7 +723,7 @@ MSCneurons.reclust@meta.data %>%
   tally() %>%
   dplyr::rename('cluster' = integrated_snn_res.0.4) -> temp_labels
 
-p2 <- table_clusters_by_orig.idents %>%
+p4 <- table_clusters_by_orig.idents %>%
   dplyr::select(-c('total_cell_count')) %>%
   reshape2::melt(id.vars = 'cluster') %>%
   ggplot(aes(cluster, value)) +
@@ -706,13 +747,41 @@ p2 <- table_clusters_by_orig.idents %>%
   )
 
 ggsave('neurons/composition_orig.idents_ClustersByNum.png',
-  p1 + p2 +
+  p3 + p4 +
     plot_layout(ncol = 2, widths = c(
       MSCneurons.reclust@meta.data$orig.ident %>% 
         unique() %>% length(),
       MSCneurons.reclust@meta.data$integrated_snn_res.0.4 %>%
         unique() %>% length() )),
   width = 18, height = 8)
+
+p5 <- p4 + 
+  # scale_fill_viridis_d(option = "magma",
+  #                      # direction = -1,
+  #                      alpha = 0.85) +
+  scale_fill_manual(values = adjustcolor(c("#f94449", "#408D8E", "#ff7d00", "#7e38b7"),
+                                         alpha.f = 0.75)) +
+  labs(x = "Neuron Cluster",
+       y = "Total Nuclei") +
+  theme(axis.title = element_text(size = 16))
+p5
+
+p6 <- p1 +
+  scale_fill_viridis_d(option = "plasma",
+                       alpha = 0.75)
+
+p6
+
+
+ggsave('neurons/composition_neuron.clusters_byPct_Num.png',
+       p6 + p5 +
+         plot_layout(ncol = 2, widths = c(
+           MSCneurons.reclust@meta.data$orig.ident %>% 
+             unique() %>% length(),
+           MSCneurons.reclust@meta.data$integrated_snn_res.0.4 %>%
+             unique() %>% length() )),
+       width = 18, height = 8)
+
 
 #### Build neuron hierarchical tree ####
 
@@ -814,12 +883,79 @@ neuron.markers.df.reduce.heatmap %>%
                      width = 5,
                      height = 15)
 
-# use ComplexHeatmap for customization and scaling
-scaled.neuron.markers <- table(MSCneurons.reclust@meta.data$seurat_clusters) %>%
-  as.data.frame() %>% 
-  rename(cluster = Var1,
-         total.neuron.count = Freq) %>% 
-  full_join(neuron.markers.df.reduce) # %>% # figure out best way to scale using full marker list?
+
+# add weights for neuron proportions to specificity
+MSCneurons.reclust@meta.data %>% 
+  group_by(seurat_clusters) %>% 
+  summarise(n_cells = n()) %>% 
+  mutate(prop = n_cells / sum(n_cells),
+         seurat_clusters = as.numeric(seurat_clusters) - 1) %>% 
+  rename(cluster = seurat_clusters) -> neuron.props
+
+neuron.markers.df %>% 
+  left_join(neuron.props,
+            by = "cluster") %>% 
+  mutate(specificity = ifelse(specificity < 0, 
+                              specificity * prop * -1,
+                              specificity * prop)) -> markers.weighted.spec
+
+write_csv(markers.weighted.spec, 'neurons/cluster_stats/neuron_clusterMarkers_weighted.csv')
+
+top6_genes = markers.weighted.spec %>% 
+  group_by(cluster) %>% 
+  slice_max(specificity, 
+            n = 6) %>% 
+  ungroup() 
+
+top6_genes %>% 
+  group_by(gene) %>%
+  slice_max(specificity, n = 1) %>%
+  dplyr::select(gene, cluster) %>% 
+  rename(top_clust = cluster) %>% 
+  distinct() -> markers.weighted.summary
+
+
+markers.weighted.spec %>%
+  dplyr::select(cluster,gene,specificity) %>% 
+  filter(gene %in% top6_genes$gene) %>% 
+  complete(gene, cluster, 
+           fill = list(specificity = NA)) %>% 
+  left_join(markers.weighted.summary, by = "gene") -> markers.df
+
+
+markers.df %>% 
+  mutate(specificity = ifelse(specificity < 0.02, NA, specificity)) %>%
+  ggplot(aes(x = factor(cluster),
+             y = gene,
+             fill = specificity)) +
+  geom_tile(color = "white",
+            lwd = 0.8) +
+  labs(x = "Neuron clusters", y = "Marker genes") +
+  scale_fill_viridis(option = "plasma", 
+                     na.value = "gray95",
+                     name = "Specificity score",
+                     direction = -1, 
+                     begin = 0.0, end = 0.9) +
+  facet_grid(top_clust ~ ., 
+             scales = "free_y", 
+             space = "free_y") +
+  theme_classic() +
+  ggtitle("Cluster Marker Genes") +
+  theme(strip.text.y = element_blank(),
+        panel.spacing = unit(1, "mm"),
+        plot.title = element_text(hjust = 0.5, size = 25),
+        axis.text.x = element_text(angle = 45, vjust = 0.65, size = 11),
+        axis.title.x = element_text(size = 25),
+        axis.title.y = element_text(size = 25),
+        axis.text.y = element_text(size = 12),
+              axis.title = element_text(size = 17),
+              legend.title = element_text(size = 20, face = "italic"),
+              legend.text = element_text(size = 17, face = "bold"),
+        plot.margin = unit(c(1, 1, 1, 1), "cm"))
+
+ggsave(file = "./neurons/cluster_marker.test.png",
+       width = 7.5, height = 15)
+
 
 #### Neuron cluster limma-trend (DGE) ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))

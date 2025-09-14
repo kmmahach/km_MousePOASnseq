@@ -322,7 +322,37 @@ Seurat::DimPlot(int.ldfs,
   Seurat::NoAxes() 
 
 ggsave('predicted.broad.UMAP.png',
-       height = 10, width =12)  
+       height = 10, width = 12)  
+
+# split OPCs and oligodendrocytes and remove ParsTuber
+int.ldfs@meta.data$Cell_Type = int.ldfs@meta.data$parent_id.broad.prob
+int.ldfs@meta.data$Cell_Type = ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-4: Oligo+Precursor" &
+                                        int.ldfs@meta.data$sctype.integrated == "Oligodendrocyte precursor cells",
+                                      "OPCs", ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-4: Oligo+Precursor" &
+                                                       !(int.ldfs@meta.data$sctype.integrated == "Oligodendrocyte precursor cells"),
+                                                     "Oligodendrocytes", ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-1: GLU",
+                                                                                "Glutamatergic neurons", ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-2: GABA",
+                                                                                                                "GABAergic neurons", ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-3: Astro-Ependymal" &
+                                                                                                                                              !(int.ldfs@meta.data$sctype.integrated == "Radial glial cells"),
+                                                                                                                                            "Astrocytes", ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-5: Immune", 
+                                                                                                                                                                 "Microglia", ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-7: Vascular",
+                                                                                                                                                                                     "Epithelial Cells", "Unknown")))))))
+ 
+
+Seurat::DimPlot(int.ldfs,
+                group.by = "Cell_Type",
+                cols = c('#7570b3',
+                         '#a6761d',
+                         '#d95f02',
+                         '#1b9e77',
+                         '#66a61e',
+                         '#e7298a',
+                         '#e6ab02',
+                         'grey')) +
+  ggtitle("Cell Type Annotation") 
+
+ggsave('assigned.cell_types.UMAP.png',
+       height = 6, width = 8)  
 
 
 ## predicted exp
@@ -782,7 +812,7 @@ query_seurat_object = project_query(query_seurat_object = query_seurat_object,
                                     reference_map_reduc = mapscvi::reference_hypoMap_downsample@reductions[[reference_reduction]],
                                     reference_map_umap = mapscvi::reference_hypoMap_downsample@reductions[[paste0("umap_",reference_reduction)]],
                                     query_reduction = "scvi",
-                                    label_vec =cluster_labels)  
+                                    label_vec = cluster_labels)  
 
 
 ## graph
@@ -821,6 +851,10 @@ predicted.prob.df.spatial = predicted.prob.df %>%
 query_seurat_object <- AddMetaData(query_seurat_object, 
                                    predicted.prob.df.spatial$Region_summarized,
                                    col.name = 'Region_summarized')
+
+# save metadata
+meta <- as.data.frame(query_seurat_object@meta.data)
+write.csv(meta, "./data/metadata_with_predictedRegions.csv")
 
 # Seurat::DimPlot(query_seurat_object,
 #                 group.by = "predicted.prob")
@@ -888,7 +922,7 @@ query_seurat_object@meta.data %>%
              color = orig.ident)) +
   geom_boxplot(width = 0,
                position = position_dodge(0.75)) +
-  geom_point(position = position_dodge(width=0.75),
+  geom_point(position = position_dodge(width = 0.75),
              aes(shape = indiv_genotype,
                  group = orig.ident),
              size = 3) +

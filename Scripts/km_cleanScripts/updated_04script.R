@@ -57,25 +57,61 @@ subset_genes <- c("Esr1",
                   "Nr3c1",
                   "Nr3c2")
 
-# graph overall neurons
+# graph overall neurons - SCT norm counts
 DotPlot(int.ldfs,
         assay = 'SCT',
         features = select_genes,
         group.by = 'orig.ident',
-        col.min = 0) +
+        col.min = 0,
+        scale = TRUE) +
   theme_classic()
 
 ggsave('neurons/neuroendocrine_genes/selectGenes_neurons.png',
        height = 4, width = 9)
 
+
+# graph with reg norm counts
+int.ldfs = NormalizeData(int.ldfs, 
+                         assay = "RNA")
+
+DotPlot(int.ldfs,
+        assay = 'RNA',
+        features = select_genes,
+        group.by = 'orig.ident',
+        min_count = 2,
+        col.min = 0,
+        scale = FALSE) +
+  theme_classic()
+
+ggsave('neurons/neuroendocrine_genes/selectGenes_neurons_unscaledExpr.png',
+       height = 4, width = 9)
+
+DotPlot(int.ldfs,
+        assay = 'RNA',
+        features = subset_genes,
+        group.by = 'orig.ident',
+        min_count = 2,
+        col.min = 0,
+        scale = FALSE) +
+  scale_y_discrete(labels = sub("\\.data", "", 
+                                unique(int.ldfs$orig.ident))) +
+  theme_classic() +
+  ggtitle('Expression in Neurons') +
+  theme(axis.title = element_blank(),
+        plot.margin = unit(c(.5,.5,2,.5), "cm"))
+
+ggsave('neurons/neuroendocrine_genes/neur.endoGenes_neurons_unscaledExpr.png',
+       height = 4, width = 5.5)
+
 #### Candidate neuroendocrine genes ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
 
 # subset by select_genes
+DefaultAssay(int.ldfs) = "RNA"
 sub.MSCneurons <- subset_by_gene(int.ldfs,
                                  select_genes,
-                                 slot = "data",
-                                 min_count = 0.5)
+                                 slot = "counts",
+                                 min_count = 2)
 
 # get presence/absence (1/0) for select_genes
 umap = data.frame(int.ldfs@reductions$umap@cell.embeddings) %>%
@@ -125,10 +161,7 @@ sum_neur_indiv %>%
                  group = orig.ident),
              size = 2) +
   theme_classic() +
-  scale_color_manual(values = c("#CC5500",
-                                "#FF6A00",
-                                "#0077CC",
-                                "#0095FF")) +
+  scale_color_manual(values = c("#f94449", "#408D8E", "#ff7d00", "#7e38b7")) +
   xlab('') + ylab('% of neurons') +
   ggtitle('Percent nuclei expressing neur-endo genes')
 
@@ -384,22 +417,22 @@ write_csv(neuron.genes.modglm,
 #### DGE with limma ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
 
-# load if starting here:
-load(paste0(root.dir, "/HypoMap/data/integrated_seurat_withHypoMap_predictions.rda"))
-
-# set idents
-Idents(object = int.ldfs) <- "parent_id.broad.prob"
-
-# subset to neurons
-int.ldfs = subset(int.ldfs,
-                  idents = c("C7-2: GABA", "C7-1: GLU"))
-
-# subset genes
-subset_genes <- c("Esr1",
-                  "Ar",
-                  "Pgr",
-                  "Nr3c1",
-                  "Nr3c2")
+# # load if starting here:
+# load(paste0(root.dir, "/HypoMap/data/integrated_seurat_withHypoMap_predictions.rda"))
+# 
+# # set idents
+# Idents(object = int.ldfs) <- "parent_id.broad.prob"
+# 
+# # subset to neurons
+# int.ldfs = subset(int.ldfs,
+#                   idents = c("C7-2: GABA", "C7-1: GLU"))
+# 
+# # subset genes
+# subset_genes <- c("Esr1",
+#                   "Ar",
+#                   "Pgr",
+#                   "Nr3c1",
+#                   "Nr3c2")
 
 l.dfs <- subset_by_gene(int.ldfs, 
                         subset_genes, 
@@ -408,6 +441,8 @@ l.dfs <- subset_by_gene(int.ldfs,
 
 
 # raw counts and norm.counts of variable genes
+# l.dfs <- lapply(l.dfs, \(x) {x@active.assay = "integrated"; x} ) 
+
 dge_data <- prep.for.DGE(l.dfs, 
                          selection.method = "vst", 
                          SCTransformed = TRUE, 
@@ -421,7 +456,7 @@ limma_results <- run_limmatrend(dge_data$results, "./neurons/neuroendocrine_gene
   
 #### RRHO/RedRibbon ####
 # how to determine max log scale before graphing? 
-  max.log.scale = 235;
+  max.log.scale = 115;
 # make sure these match upper/lower case
   sex = c("Female", "Male");
   status = c("Dom", "Sub");

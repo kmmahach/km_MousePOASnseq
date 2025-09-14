@@ -25,8 +25,8 @@ Idents(object = int.ldfs) <- "parent_id.broad.prob"
 int.ldfs = subset(int.ldfs,
                   idents = c("C7-2: GABA", "C7-1: GLU"))
 
-# subset with SCT data
-DefaultAssay(int.ldfs) = "SCT"
+# subset with RNA counts
+DefaultAssay(int.ldfs) = "RNA"
 
 #### Neuropeptide candidates ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
@@ -46,8 +46,8 @@ unlist(as.vector(neuropeptides.genes$gene)) -> neuropeptides.genes
 # subset Seurat object by neuropeptide.genes
 sub.MSCneurons <- subset_by_gene(int.ldfs,
                                  neuropeptides.genes,
-                                 slot = "data",
-                                 min_count = 0.5)
+                                 slot = "counts",
+                                 min_count = 2)
 
 # get presence/absence (1/0) for neuropeptide.genes
 umap = data.frame(int.ldfs@reductions$umap@cell.embeddings) %>%
@@ -226,19 +226,29 @@ ggplot(np_DGE, aes(x = reorder(gene, -cell_count),
   labs(x = "top 25 expressed neuropeptides",
        y = "neuronal subgroup") +
   geom_tile(color = "grey90") + 
-  scale_fill_gradient2(name = bquote(~italic(log[2]~FC))) +
+  scale_fill_gradient2(name = bquote(~italic(log[2]~FC)),
+                       low = muted("purple"),
+                       high = muted("#408D8E")) +
   ggnewscale::new_scale_fill() +
   geom_tile(data = distinct(np_DGE, group, logFC),
             aes(x = 1, y = 1, 
                 fill = group), 
             alpha = 0) +
+  # scale_fill_manual(name = paste0(sprintf("\u2191 \u2191"), " expr in"),
+  #                   values = c("Dom" = muted("blue"), 
+  #                              "Sub" = muted("red"))) +
+  # guides(fill = guide_legend(override.aes = list(values = c(muted("blue"), 
+  #                                                           muted("red")),
+  #                                                alpha = c(1,1), 
+  #                                                shape = c(1,1)))) +
   scale_fill_manual(name = paste0(sprintf("\u2191 \u2191"), " expr in"),
-                    values = c("Dom" = muted("blue"), 
-                               "Sub" = muted("red"))) +
-  guides(fill = guide_legend(override.aes = list(values = c(muted("blue"), 
-                                                            muted("red")),
-                                                 alpha = c(1,1), 
-                                                 shape = c(1,1)))) +
+                    values = c("Dom" = muted("purple"), 
+                               "Sub" = muted("#408D8E"))) +
+  guides(fill = guide_legend(override.aes = 
+                               list(values = c(muted("purple"), 
+                                              muted("#408D8E")),
+                             alpha = c(1,1),
+                             shape = c(1,1)))) +
   theme_classic() +
   facet_wrap(~ sex) +
   ggtitle("Differential Expression of Neuropeptides in Neuronal Nuclei") +

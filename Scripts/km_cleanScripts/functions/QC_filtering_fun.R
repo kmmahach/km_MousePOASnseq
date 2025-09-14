@@ -693,6 +693,146 @@ check.filters <- function(list_of_SeuratObj,
   lapply(list_of_SeuratObj, generate.graphs)
 }
 
+# nCount_RNA x nFeature_RNA with nFeature_RNA histo before and after applying filters
+plot.filters <- function(list_of_SeuratObj,
+                         filters,
+                         outdir = NULL) {
+  
+  stopifnot("`filters` must be numeric" = is.numeric(filters))
+  
+  if(!is.matrix(filters)) {
+    filters <- as.matrix(filters)
+  }
+  
+  if (is.list(list_of_SeuratObj) && !is.null(names(list_of_SeuratObj))) {
+    list_of_SeuratObj <- list_of_SeuratObj
+  } else {
+    list_of_SeuratObj <- as_named_list(!!rlang::enquo(list_of_SeuratObj))
+  }
+  
+  if(!require(gridExtra)) {
+    message("trying to install gridExtra")
+    install.packages("gridExtra")
+    
+    if(!require(collapse)) {
+      stop("install gridExtra package before running")
+    }
+  }
+  
+  generate.graphs <- \(x) {
+    
+    my_filters <- filters[(rownames(filters) %in% Seurat::Project(x)),]
+    
+    suffix <- Seurat::Project(x)
+    
+    if(substr(suffix, nchar(suffix) - 4, nchar(suffix)) == ".data") {
+      title <- gsub('.{5}$', '', suffix)
+      
+    } else {
+      title <- suffix
+    }
+    
+    scatter1 <- FeatureScatter(x,
+                               feature1 = "nCount_RNA",
+                               feature2 = "nFeature_RNA",
+                               cols = "#978eeb") +
+      geom_hline(yintercept = my_filters["nFeature_min"],
+                 linetype = "dotted") +
+      geom_hline(yintercept = my_filters["nFeature_max"],
+                 linetype = "dotted") +
+      annotate("text", x = Inf, 
+               y = my_filters["nFeature_min"],
+               label = paste(my_filters["nFeature_min"]),
+               vjust = -0.25, hjust = 1) +
+      annotate("text", x = Inf,
+               y = my_filters["nFeature_max"],
+               label = paste(my_filters["nFeature_max"]),
+               vjust = -0.25, hjust = 1) +
+      theme(legend.position = "none")
+    
+    
+    hist1 <- x@meta.data %>%
+      subset(nFeature_RNA < 6000) %>%
+      mutate(Subset = ifelse(nFeature_RNA > my_filters["nFeature_min"] 
+                             & nFeature_RNA < my_filters["nFeature_max"],
+                             'Keep',
+                             'Remove')) %>%
+      ggplot(aes(nFeature_RNA,
+                 fill = Subset))+
+      geom_histogram(binwidth = 10) +
+      theme_bw() +
+      ggtitle("unqiue features per cell") +
+      scale_fill_manual(values = c('#88e788',
+                                   'black'))
+    
+    x1 <- subset(x, subset =
+                   nFeature_RNA >= my_filters["nFeature_min"] &
+                   nFeature_RNA <= my_filters["nFeature_max"] &
+                   percent.mt < my_filters["mito.max"] & 
+                   doublet == 'singlet')
+    
+    xsum <- x1@meta.data %>% 
+      summarize(max = max(nFeature_RNA),
+                min = min(nFeature_RNA),
+                median = median(nFeature_RNA),
+                count = n())
+    
+    scatter2 <- FeatureScatter(x1, 
+                               feature1 = "nCount_RNA",
+                               feature2 = "nFeature_RNA",
+                               cols = "#978eeb") +
+      theme(legend.position = "none",
+            plot.margin = unit(c(0.5,.5,.5,.3), "cm"))
+    
+    hist2 <- x1@meta.data %>%
+      ggplot(aes(nFeature_RNA))+
+      geom_histogram(binwidth = 10) +
+      theme_bw() +
+      theme(plot.margin = unit(c(0,2.87,1,0.25), "cm")) +
+      ggtitle("filtered features per cell")
+    
+    
+    if(is.null(outdir)) {
+      outdir = paste(getwd())
+      message("outdir not specified; saving plots to working directory")
+      
+    } else {
+      outdir = outdir
+    }
+    
+    if(length(grep(paste0("/",title,"$"), list.dirs(outdir))) > 0) {
+      
+      plotname <- paste0(outdir, "/", title, 
+                         "/filtering.feature.plots.", 
+                         title, ".png")
+      
+    } else {
+      
+      plotname <- paste0(outdir, "/filtering.feature.plots.",
+                         title, ".png")
+    }
+    
+    plots <- arrangeGrob(scatter1, scatter2, hist1, hist2,
+                         ncol = 2, widths = c(1,1.25),
+                         layout_matrix = rbind(c(1, 3),
+                                               c(2, 4)),
+                         
+                         top = grid::textGrob(paste(title),
+                                              gp=grid::gpar(fontsize=24)))
+    
+    ggsave(plotname,
+           plots,
+           units = "in", 
+           width = 9, 
+           height = 7.5, 
+           bg = "white")
+  }
+  
+  lapply(list_of_SeuratObj, generate.graphs)
+  
+  
+}
+
 # filter data in Seurat obj with specified thresholds
 make.filtered.seurat <- function(list_of_SeuratObj, 
                                  filters) {

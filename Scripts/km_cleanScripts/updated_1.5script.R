@@ -18,7 +18,7 @@ source("./functions/QC_filtering_fun.R")
 
 # libraries (save dependencies and package versions)
 load_packages(c("tidyverse", "Seurat", "SeuratExtend", "collapse", "clustree",
-                "scCustomize", "HGNChelper","openxlsx", "ggalluvial"),
+                "scCustomize", "HGNChelper","openxlsx", "ggalluvial", "patchwork"),
               out_prefix = "1.5")
 
 #### Seurat Object Integration ####
@@ -62,21 +62,14 @@ int.ldfs %>%
 # check umap
 DimPlot(int.ldfs,
         reduction = "umap",
-        group.by = "orig.ident")
+        group.by = "orig.ident") +
+  NoAxes() -> d0
+
+d0$data$orig.ident = sub("\\.data$", "", d0$data$orig.ident)
 
 ggsave(paste0(qc_plots_path, 
               "/integrated/dimplot.ident.integrated.png"),
-       height = 10, width = 10)
-
-DimPlot(int.ldfs,
-        reduction = "umap",
-        label = TRUE,
-        repel = TRUE)
-
-ggsave(paste0(qc_plots_path, 
-              "/integrated/clusters.dimplot.integrated.png"),
-       height = 10,
-       width = 10)
+       d0, height = 10, width = 12)
 
 # find best cluster resolution?
 res.1 = seq(0,1,0.2)
@@ -147,35 +140,110 @@ DimPlot(int.ldfs,
 ggsave(paste0(qc_plots_path, "/integrated/clusters.dimplot.comparison.all.png"),
        width = 10, height = 10)
 
+
+### supplemental fig 2
 # across samples cluster
 DimPlot(int.ldfs,
         reduction = "umap",
         split.by = 'orig.ident',
-        pt.size = 1) +
-  theme(legend.position = 'none')
+        pt.size = 1, 
+        cols = c('#d95f02',
+                 '#f8766d',
+                 '#7570b3',
+                 '#e7298a',
+                 '#1b9e77',
+                 '#00bdd0',
+                 '#00b0f6',
+                 '#a6761d',
+                 '#ac88ff',
+                 '#a3a500',
+                 '#66a61e',
+                 '#e76bf3',
+                 '#7997ff',
+                 '#9acd32',
+                 '#ff61c9',
+                 '#00bc59',
+                 '#e6ab02',
+                 '#00008b',
+                 '#341539',
+                 'grey',
+                 '#bb9d00',
+                 '#ed8141')) +
+  theme(text = element_text(size = 18)) -> d1
+
+d1$data$orig.ident = sub("\\.data$", ".clusters", d1$data$orig.ident)
 
 ggsave(paste0(qc_plots_path, "/integrated/domVsub.clusters.dimplot.comparison.all.png"),
-       width = 20, height = 5)
+       d1, width = 20, height = 5)
 
 # across samples genotype
 DimPlot(int.ldfs,
         reduction = "umap",
         split.by = 'orig.ident',
         group.by = 'indiv_genotype',
-        pt.size = 1) 
+        pt.size = 1) +
+  theme(text = element_text(size = 18)) +
+  ggtitle(NULL) -> d2
+
+d2$data$orig.ident = sub("\\.data$", ".indiv_genotypes", d2$data$orig.ident)
 
 ggsave(paste0(qc_plots_path, "/integrated/domVsub.genotype.dimplot.comparison.all.png"),
-       width = 20, height = 5)
+       d2, width = 20, height = 5)
 
 # across samples nfeature
 FeaturePlot(int.ldfs,
             reduction = "umap",
             split.by = 'orig.ident',
             features = 'nFeature_SCT',
-            pt.size = 1)
+            pt.size = 1,
+            combine = TRUE) +
+  plot_layout(axes = "collect",
+              guides = "collect") &
+  labs(color = "nFeature_SCT") &
+  theme(legend.position = "right",
+        legend.title = element_text(face = "bold"),
+        axis.title.y.right = element_blank()) -> d3
+
+for (i in 1:length(d3)) {
+  d3[[i]]$labels$title <- sub("\\.data$", ".feature_count", d3[[i]]$labels$title)
+}
 
 ggsave(paste0(qc_plots_path, "/integrated/domVsub.nfeature.dimplot.comparison.all.png"),
-       width = 20, height = 5)
+       d3, width = 20, height = 5)
+
+# supplemental fig 3 - new cell clusters
+DimPlot(int.ldfs,
+        reduction = "umap",
+        cols = c('#d95f02',
+                 '#f8766d',
+                 '#7570b3',
+                 '#e7298a',
+                 '#1b9e77',
+                 '#00bdd0',
+                 '#00b0f6',
+                 '#a6761d',
+                 '#ac88ff',
+                 '#a3a500',
+                 '#66a61e',
+                 '#e76bf3',
+                 '#7997ff',
+                 '#9acd32',
+                 '#ff61c9',
+                 '#00bc59',
+                 '#e6ab02',
+                 '#00008b',
+                 '#341539',
+                 'grey',
+                 '#bb9d00',
+                 '#ed8141')) +
+  ggtitle("integrated.clusters") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  NoAxes()
+
+ggsave(paste0(qc_plots_path, 
+              "/integrated/clusters.dimplot.integrated.png"),
+       height = 10,
+       width = 11.5)
 
 #### ScType on Integrated SeuratObj ####
 
@@ -194,6 +262,23 @@ gs_list = gene_sets_prepare(db_, tissue)
 l.dfs <- annotate.with.sctype(int.ldfs, 
                               "sctype.integrated", 
                               qc_plots_path) %>% set_names("int.ldfs")
+
+DimPlot(int.ldfs, 
+        reduction = "umap", 
+        group.by = 'sctype.integrated', 
+        cols = c('#7570b3',
+                 '#a6761d',
+                 '#1b9e77',
+                 '#66a61e',
+                 '#e6ab02',
+                 '#d95f02',
+                 '#e7298a',
+                 '#341539',
+                 'grey')) + 
+  NoAxes()
+
+ggsave(paste0(qc_plots_path, "/integrated/sctype.dimplot.colormatch.png"),
+       width = 13, height = 10) 
 
 ### compare individual to integrated
 ## graph alluvial plot

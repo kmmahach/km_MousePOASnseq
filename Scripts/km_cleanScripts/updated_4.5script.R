@@ -107,6 +107,8 @@ cor$consensus.correlation # check
 # not much - don't need to add random effect of id
 # but probably should add weights for neuron proportions in grouped contrasts
 neuron.proportions <- get.neuron.proportions(MSCneurons.reclust)
+  write.csv(neuron.proportions, 
+            file = paste0(root.dir, "/DGE_CellTypes/neurons/cluster_stats/neuron_clusterWeights.csv"))
 
 neuron.proportions %>% 
   dplyr::select(mean_prop) -> weights
@@ -201,14 +203,172 @@ save(p.dl.rand, t.dl.rand,
 
   rm(p.dl.rand, t.dl.rand)
 
-# volcano plots
+#### volcano plots ####
 sex = c("Male", "Female")
 status = c("Dom", "Sub")
 
   volcano.plot(limma_list,
                outdir = paste0(root.dir, "/DGE_CellTypes/neurons/all_neurons/limma_perm"))
 
+femaleDEGs <- limma_list$Fdom_vs_sub_all
+maleDEGs <- limma_list$Mdom_vs_sub_all
 
+up <- "Dom"
+down <- "Sub"
+
+    dcf <- femaleDEGs %>% 
+      mutate(log10 = ifelse(P.Value==0, 4, -log10(P.Value))) %>% 
+      mutate(P.Value = ifelse(P.Value==0, 0.0001, P.Value)) %>% 
+      mutate(rank = logFC * log10) %>% 
+      mutate(diffexpressed = ifelse(logFC > 0 & P.Value < 0.05, "UP", 
+                                    ifelse(logFC < -0 & P.Value < 0.05, "DOWN", "NO")))
+    
+    max.x <- round(max(dcf$logFC) * 2) / 2
+    min.x <- round(min(dcf$logFC) * 2) / 2 
+    breaks = seq(min.x - 1, max.x, 0.5)
+    
+    upgene_labels <- dcf %>% slice_max(order_by = rank, n = 10)
+    downgene_labels <- dcf %>% slice_max(order_by = -rank, n = 10)
+    
+    dcf_jitters <- subset(dcf, dcf$log10 > 3 & 
+                            !gene %in% c(upgene_labels$gene, downgene_labels$gene))
+    
+    dcf_jitters_up <- subset(dcf, dcf$gene %in% upgene_labels)
+    dcf_jitters_down <- subset(dcf, dcf$gene %in% downgene_labels)
+    pos_jitter <- position_jitter(width = 0.4, height = 0.1, seed = 123)
+
+    ggplot() +
+      geom_point(data = subset(dcf, !gene %in% c(dcf_jitters_up$gene,
+                                                 dcf_jitters_down$gene,
+                                                 dcf_jitters$gene)),
+                 aes(x = logFC, y = -log10(P.Value), color = diffexpressed), 
+                 alpha = 0.25, size = 3.5) +
+      geom_jitter(data = dcf_jitters, 
+                  aes(x = logFC, y = log10, color = diffexpressed), 
+                  height = 0.4, width = 0.1, 
+                  alpha = 0.25, size = 3.5) +
+      geom_jitter(data = upgene_labels,
+                  aes(x = logFC, y = log10, color = diffexpressed), 
+                  position = pos_jitter,
+                  alpha = 0.25, size = 3) +
+      geom_jitter(data = downgene_labels,
+                  aes(x = logFC, y = log10, color = diffexpressed), 
+                  position = pos_jitter,
+                  alpha = 0.25, size = 3) +
+      geom_text_repel(data = upgene_labels,
+                      aes(x = logFC, y = -log10(P.Value), label = gene),
+                      size = 5, color = "black", hjust = -1, vjust = 0.5,
+                      max.overlaps = Inf) +
+      geom_text_repel(data = downgene_labels,
+                      aes(x = logFC, y = -log10(P.Value), label = gene),
+                      size = 5, color = "black", vjust = -1.2, hjust = -0.5,
+                      max.overlaps = Inf) +
+      geom_hline(yintercept = 1.301, lty = 4, col = "grey", lwd = 0.8) +
+      labs(x = "log2 Fold Change",
+           y = bquote(~-Log[10]~italic(eFDR))) +
+      annotate(geom = "text", x = 1.5, y = 0.5, 
+               label = paste0("\u2191\u2191", up), 
+               fontface = "bold", color = "black", size = 8) +
+      annotate(geom = "text", x = -1.5, y = 0.5, 
+               label = paste0("\u2191\u2191", down), 
+               fontface = "bold", color = "black", size = 8) +
+      scale_color_manual(values = c("UP" = "#f94449", "DOWN" = "#408D8E", "NO" = "grey")) +
+      scale_x_continuous(limits = c(min.x -1, max.x), breaks = breaks) +
+      ylim(0, 4) +
+      theme_classic() +
+      theme(axis.text.x = element_text(vjust = 1, size = 15),
+            axis.text.y = element_text(hjust = 0.5, size = 20),
+            axis.text = element_text(color = "#3C3C3C", size = 20),
+            axis.title = element_text(size = 20),   
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            legend.position = "none",
+            strip.background = element_blank(),
+            strip.text.x = element_text(size = 20),
+            text = element_text(size = 25)) +
+      ggtitle("Females only")
+    
+
+    ggsave(paste0(getwd(), "/neurons/all_neurons/onlyFem_all_volcano_plot.png"),
+           width = 27, height = 22, units = "cm", dpi = 600)
+
+    
+    dcm <- maleDEGs %>% 
+      mutate(log10 = ifelse(P.Value==0, 4, -log10(P.Value))) %>% 
+      mutate(P.Value = ifelse(P.Value==0, 0.0001, P.Value)) %>% 
+      mutate(rank = logFC * log10) %>% 
+      mutate(diffexpressed = ifelse(logFC > 0 & P.Value < 0.05, "UP", 
+                                    ifelse(logFC < -0 & P.Value < 0.05, "DOWN", "NO")))
+    
+    max.x <- round(max(dcm$logFC) * 2) / 2
+    min.x <- round(min(dcm$logFC) * 2) / 2 
+    breaks = seq(min.x, max.x, 0.5)
+    
+    upgene_labels <- dcm %>% slice_max(order_by = rank, n = 10)
+    downgene_labels <- dcm %>% slice_max(order_by = -rank, n = 10)
+    
+    dcm_jitters <- subset(dcm, dcm$log10 > 3 & 
+                            !gene %in% c(upgene_labels$gene, downgene_labels$gene))
+    
+    dcm_jitters_up <- subset(dcm, dcm$gene %in% upgene_labels)
+    dcm_jitters_down <- subset(dcm, dcm$gene %in% downgene_labels)
+    pos_jitter <- position_jitter(width = 0.4, height = 0.1, seed = 123)
+    
+    ggplot() +
+      geom_point(data = subset(dcm, !gene %in% c(dcm_jitters_up$gene,
+                                                 dcm_jitters_down$gene,
+                                                 dcm_jitters$gene)),
+                 aes(x = logFC, y = log10, color = diffexpressed), 
+                 alpha = 0.25, size = 3.5) +
+      geom_jitter(data = dcm_jitters, 
+                  aes(x = logFC, y = log10, color = diffexpressed), 
+                  height = 0.4, width = 0.1, 
+                  alpha = 0.25, size = 3.5) +
+      geom_jitter(data = upgene_labels,
+                  aes(x = logFC, y = log10, color = diffexpressed), 
+                  position = pos_jitter,
+                  alpha = 0.25, size = 3) +
+      geom_jitter(data = downgene_labels,
+                  aes(x = logFC, y = log10, color = diffexpressed), 
+                  position = pos_jitter,
+                  alpha = 0.25, size = 3) +
+      geom_text_repel(data = upgene_labels,
+                      aes(x = logFC, y = log10, label = gene),
+                      size = 5, color = "black", hjust = 0.2, vjust = 0.7,
+                      max.overlaps = Inf) +
+      geom_text_repel(data = downgene_labels,
+                      aes(x = logFC, y = log10, label = gene),
+                      size = 5, color = "black", vjust = 0.5, hjust = -0.5,
+                      max.overlaps = Inf) +
+      geom_hline(yintercept = 1.301, lty = 4, col = "grey", lwd = 0.8) +
+      labs(x = "log2 Fold Change",
+           y = bquote(~-Log[10]~italic(eFDR))) +
+      annotate(geom = "text", x = 1.5, y = 0.5, 
+               label = paste0("\u2191\u2191", up), 
+               fontface = "bold", color = "black", size = 8) +
+      annotate(geom = "text", x = -1.5, y = 0.5, 
+               label = paste0("\u2191\u2191", down), 
+               fontface = "bold", color = "black", size = 8) +
+      scale_color_manual(values = c("UP" =  "#ff7d00",  "DOWN" = "#7e38b7", "NO" = "grey")) +
+      scale_x_continuous(limits = c(min.x, max.x), breaks = breaks) +
+      ylim(0, 4) +
+      theme_classic() +
+      theme(axis.text.x = element_text(vjust = 1, size = 15),
+            axis.text.y = element_text(hjust = 0.5, size = 20),
+            axis.text = element_text(color = "#3C3C3C", size = 20),
+            axis.title = element_text(size = 20),   
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            legend.position = "none",
+            strip.background = element_blank(),
+            strip.text.x = element_text(size = 20),
+            text = element_text(size = 25)) +
+      ggtitle("Males only")
+    
+    
+    ggsave(paste0(getwd(), "/neurons/all_neurons/onlyMale_all_volcano_plot.png"),
+           width = 27, height = 22, units = "cm", dpi = 600)
+    
 #### RRHO on limma permutation results #### 
 setwd(paste0(root.dir, "/DGE_CellTypes/")) 
 
@@ -243,8 +403,8 @@ rrho_results <- get.RRHO(limma_list,
 
 #### Concordant/discordant DEGs across clusters ####
 setwd(paste0(root.dir, "/DGE_CellTypes/")) 
-  ## if starting here:
-  # load("./neurons/all_neurons/limma_perm/limma_perm_results.rda") 
+  # revert format
+  load("./neurons/all_neurons/limma_perm/limma_perm_results.rda")
   
 subset_by_sex <- function(limma_list,
                           logFC_threshold = 0.2,
@@ -339,7 +499,7 @@ topDEGs %>%
             alpha = 0) +
   scale_fill_manual(name = paste0(sprintf("\u2191 \u2191"), " expr in"),
                     values = c("Dom" = muted("blue"), "Sub" = muted("red"))) +
-  guides(fill = guide_legend(override.aes = list(values = c(muted("blue"), 
+  guides(fill = guide_legend(override.aes = list(values = c(muted("blue"),
                                                             muted("red")),
                                                  alpha = c(1,1),
                                                  shape = c(1,1)))) +
@@ -359,7 +519,220 @@ topDEGs %>%
 
 ggsave('neurons/all_neurons/topDEGs_byCluster.png',
        width = 12, height = 6) 
+
+# overlap with cluster marker genes 
+neuron_clusterMarkers <- read_csv('neurons/cluster_stats/neuron_clusterMarkers_weighted.csv')
+
+sig_maleDEGs <- maleDEGs %>% 
+  filter(abs(logFC) > 0.2, P.Value < 0.05)
+
+sig_femaleDEGs <- femaleDEGs %>% 
+  filter(abs(logFC) > 0.2, P.Value < 0.05)
+
+conc_genes = intersect(sig_femaleDEGs$gene,
+                       sig_maleDEGs$gene)
+
+result <- limma_list %>%
+  .[str_detect(names(.), "_cluster\\d+$")] %>%
+  imap_dfr(~ {
+    .x %>%
+      filter(gene %in% conc_genes) %>%
+      select(gene, logFC, P.Value) %>%
+      mutate(
+        sex = str_to_lower(str_sub(.y, 1, 1)),  
+        cluster = str_extract(.y, "(?<=_cluster)\\d+")
+      )
+  }) %>%
+  pivot_wider(
+    names_from = sex,
+    values_from = c(logFC, P.Value),
+    names_glue = "{.value}.{sex}"
+  ) %>%
+  filter(!is.na(logFC.f) & !is.na(logFC.m)) %>%
+  group_by(cluster) %>%
+  filter(all(!is.na(logFC.f)) & all(!is.na(logFC.m))) %>%
+  ungroup() %>% 
+  mutate(
+    logFC.f   = ifelse(P.Value.f < 0.05 & abs(logFC.f) > 0.2, logFC.f, NA),
+    logFC.m   = ifelse(P.Value.m < 0.05 & abs(logFC.m) > 0.2, logFC.m, NA),
+    P.Value.f = ifelse(P.Value.f < 0.05 & abs(logFC.f) > 0.2, P.Value.f, NA),
+    P.Value.m = ifelse(P.Value.m < 0.05 & abs(logFC.m) > 0.2, P.Value.m, NA),
+    avg.logFC = (abs(logFC.f) + abs(logFC.m)) / 2 
+  ) %>% 
+  filter(!(is.na(logFC.f) | is.na(logFC.m)))
+
+neuron_clusterMarkers_conc <- neuron_clusterMarkers %>% 
+  filter(gene %in% result$gene) 
+
+result.test = left_join(result, neuron_clusterMarkers_conc[, c("gene", "specificity")]) 
+
+result.test %>% 
+  # slice_max(avg.logFC, n = 6) %>% 
+  dplyr::select(gene, cluster, logFC.f, logFC.m, avg.logFC, specificity) %>%
+  complete(gene, cluster,
+           fill = list(avg.logFC = NA)) %>%
+  group_by(cluster) %>% 
+  mutate(avg.logFC = ifelse(logFC.f * logFC.m < 0, -1 * avg.logFC, avg.logFC),
+         direction = ifelse(avg.logFC > 0, "concordant", "discordant")) -> result.test
+
+result.test %>% 
+  ggplot(aes(x = factor(cluster),
+             y = gene,
+             fill = avg.logFC)) +
+  geom_tile(color = "white",
+            lwd = 0.8) +
+  labs(x = "Neuron clusters", y = "cluster marker genes") +
+  scale_fill_gradient2(low = "#408D8E",
+                       high = "#7e38b7",
+                       na.value = "gray95",
+                       name = bquote(avg~abs(log[2]~FC))) +
+  ggnewscale::new_scale_fill() +
+  geom_tile(data = distinct(drop_na(result.test), avg.logFC, direction),
+            aes(x = 1,
+                y = 1,
+                fill = direction),
+            alpha = 0) +
+  scale_fill_manual(name = "effect of status across sex",
+                    values = c("concordant" = "#7e38b7", "discordant" = "#408D8E")) +
+  guides(fill = guide_legend(override.aes = list(values = c("#7e38b7",
+                                                            "#408D8E"),
+                                                 alpha = c(1,1),
+                                                 shape = c(1,1)))) +
+  theme_classic() +
+  ggtitle("Differential expression of cluster markers") +
+  theme(strip.text.y = element_blank(),
+        panel.spacing = unit(1, "mm"),
+        plot.title = element_text(hjust = 0, size = 22),
+        axis.text.x = element_text(angle = 45, vjust = 0.65, size = 13),
+        axis.title.x = element_text(size = 21),
+        axis.title.y = element_text(size = 21),
+        axis.text.y = element_text(size = 12),
+        axis.title = element_text(size = 15),
+        legend.title = element_text(size = 18, face = "italic"),
+        legend.text = element_text(size = 15, face = "bold"),
+        plot.margin = unit(c(1, 1, 1, 1), "cm")) +
+  coord_fixed()
+
+ggsave(file = "./neurons/cluster_marker.DEGs.png",
+       width = 9.25, height = 16)
+
+
+# color by enrichment quadrant from RRHO to indicate direction
+result2 <- rrho_results %>%
+  # keep only elements that look like clusters
+  .[str_detect(names(.), "^cluster\\d+$")] %>%
+  imap_dfr(~ {
+    cluster_name <- .y
+    df <- .x$df
+    
+    # iterate over quadrants
+    map_dfr(names(.x$RedRibbon.quads), function(q) {
+      pos <- .x$RedRibbon.quads[[q]]$positions
+      
+      df[pos, ] %>%
+        transmute(
+          gene,
+          cluster = str_extract(cluster_name, "\\d+"),
+          quadrant = q,
+          avg.logFC = (abs(a) + abs(b)) / 2
+        ) 
+    })
+  })
   
+neuron_clusterMarkers_hiSpec <- neuron_clusterMarkers %>% 
+  filter(specificity > 0.1)
+
+result2 <- result2 %>% 
+  filter(gene %in% neuron_clusterMarkers_hiSpec$gene &
+           avg.logFC > 1) %>% 
+  complete(gene, cluster,
+           fill = list(avg.logFC = NA))
+
+
+result2 %>% 
+  filter(is.na(quadrant)) %>% 
+  ggplot(aes(x = factor(cluster),
+             y = gene,
+             fill = avg.logFC)) +
+  geom_tile(color = "white",
+            lwd = 0.8) +
+  scale_fill_viridis(na.value = "gray95") +
+  geom_tile(data = subset(result2, quadrant == "upup"),
+            aes(fill = avg.logFC),
+    color = "white",
+            lwd = 0.8) +
+  scale_fill_gradient(low = "white",
+                       high = "#7e38b7",
+                       na.value = "gray95",
+                      limits = c(0, 2)) +
+  labs(fill = "avg.logFC in 'upup' quadrant") +
+  ggnewscale::new_scale_fill() +
+  geom_tile(data = subset(result2, quadrant == "downdown"),
+            aes(fill = avg.logFC),
+            color = "white",
+            lwd = 0.8) +
+  scale_fill_gradient(low = "white",
+                       high = "#408D8E",
+                       na.value = "gray95",
+                      limits = c(0, 2)) +
+  labs(fill = "avg.logFC in 'downdown' quadrant") +
+  ggnewscale::new_scale_fill() +
+  geom_tile(data = subset(result2, quadrant == "updown"),
+            aes(fill = avg.logFC),
+            color = "white",
+            lwd = 0.8) +
+  scale_fill_gradient(low = "white",
+                       high = "#f94449",
+                       na.value = "gray95",
+                      limits = c(0, 2)) +
+  labs(fill = "avg.logFC in 'updown' quadrant") +
+  ggnewscale::new_scale_fill() +
+  geom_tile(data = subset(result2, quadrant == "downup"),
+            aes(fill = avg.logFC),
+            color = "white",
+            lwd = 0.8) +
+  scale_fill_gradient(low = "white",
+                       high = "#ff7d00",
+                       na.value = "gray95",
+                      limits = c(0, 2)) +
+  labs(fill = "avg.logFC in 'downup' quadrant") +
+  labs(x = "Neuron clusters", y = "cluster marker genes") +
+  # ggnewscale::new_scale_fill() +
+  # geom_tile(data = distinct(drop_na(result2), avg.logFC, quadrant),
+  #           aes(x = 1,
+  #               y = 1,
+  #               fill = quadrant),
+  #           alpha = 0) +
+  # scale_fill_manual(name = "effect of status across sex",
+  #                   values = c("upup" = "#7e38b7",
+  #                              "downdown" = "#408D8E",
+  #                              "updown" = "#f94449",
+  #                              "downup" = "#ff7d00")) +
+  # guides(fill = guide_legend(override.aes = list(values = c("#7e38b7",
+  #                                                           "#408D8E",
+  #                                                           "#f94449",
+  #                                                           "#ff7d00")),
+  #                                                alpha = c(1,1),
+  #                                                shape = c(1,1))) +
+  theme_classic() +
+  ggtitle("Differential expression of cluster markers") +
+  theme(strip.text.y = element_blank(),
+        panel.spacing = unit(1, "mm"),
+        plot.title = element_text(hjust = 0, size = 22),
+        axis.text.x = element_text(angle = 45, vjust = 0.65, size = 13),
+        axis.title.x = element_text(size = 21),
+        axis.title.y = element_text(size = 21),
+        axis.text.y = element_text(size = 12),
+        axis.title = element_text(size = 15),
+        legend.title = element_text(size = 18, face = "italic"),
+        legend.text = element_text(size = 15, face = "bold"),
+        plot.margin = unit(c(1, 1, 1, 1), "cm")) +
+  coord_fixed()
+  
+ggsave(file = "./neurons/cluster_marker.quads.png",
+       width = 9.25, height = 16)
+
+
 #### Oxytocin and Vasopressin DE by cluster #### 
 setwd(paste0(root.dir, "/DGE_CellTypes/")) 
   ## if starting here:
