@@ -68,9 +68,9 @@ load('./data/integrated_seurat_withHypoMap.rda') # is compressed as usual, may t
 setwd(paste0(root.dir, "/HypoMap"))
 
 # graph umap
-plot_query_labels(query_seura_object=int.ldfs,
-                  reference_seurat=mapscvi::reference_hypoMap_downsample,
-                  label_col="C66_named",
+plot_query_labels(query_seura_object = int.ldfs,
+                  reference_seurat = mapscvi::reference_hypoMap_downsample,
+                  label_col = "C66_named",
                   overlay = FALSE,
                   labelonplot = FALSE)  
 
@@ -79,33 +79,32 @@ ggsave('projection.umap.predicted.png',
        width = 8)
 
 # projection onto total
-plot_query_labels(query_seura_object=int.ldfs,
-                  reference_seurat=reference_hypoMap_downsample,
-                  label_col="C66_named",
+plot_query_labels(query_seura_object = int.ldfs,
+                  reference_seurat = reference_hypoMap_downsample,
+                  label_col = "C66_named",
                   overlay = TRUE,
                   query_pt_size = 0.4,
                   labelonplot = TRUE,
-                  label.size=1.5)
+                  label.size = 1.5)
 
 ggsave('predicted.umap.projection.png',
-       height = 5,
-       width = 8)
+       height = 5, width = 8)
 
 # prediction probability
-Seurat::FeaturePlot(int.ldfs,
-                    features = "prediction_probability") + Seurat::NoAxes()
+FeaturePlot(int.ldfs,
+            features = "prediction_probability") + 
+  NoAxes()
 
 ggsave('predicted.probability.umap.png',
-       height = 5,
-       width = 8)
+       height = 5, width = 8)
 
 # prediction probability
-Seurat::DimPlot(int.ldfs,
-                group.by = "predicted") + Seurat::NoAxes() 
+DimPlot(int.ldfs,
+        group.by = "predicted") + 
+  NoAxes() 
 
 ggsave('predicted.umap.png',
-       height = 10,
-       width = 20)  
+       height = 10, width = 20)  
 
 #### Compare cell type results ####
 
@@ -114,48 +113,52 @@ ggsave('predicted.umap.png',
 cell.type.hypomap.data = readxl::read_excel('./data/42255_2022_657_MOESM3_ESM.xlsx', sheet = 6)
 
 ## subset into the cell types used for hypomap
-cell.type.hypomap.data = cell.type.hypomap.data %>% 
+cell.type.hypomap.data %>% 
   dplyr::select(c(cluster_name,
                   parent_id)) %>% 
   droplevels() %>% 
-  distinct()
+  distinct() -> cell.type.hypomap.data
 
 ## pull out cell types of interest
 # create list of cells
-mouse.snseq.cell.hypomap.list = int.ldfs@meta.data %>% 
+int.ldfs@meta.data %>% 
   pull(predicted) %>% 
   unique() %>% 
-  c()
+  c() -> mouse.snseq.cell.hypomap.list
 
 # filter down to those cells
-cell.type.hypomap.data = cell.type.hypomap.data %>% 
-  filter(cluster_name %in% mouse.snseq.cell.hypomap.list)
+cell.type.hypomap.data %>% 
+  filter(cluster_name %in% mouse.snseq.cell.hypomap.list) -> cell.type.hypomap.data
 
 #### STOP and find where HypoMap_cluster_parent_ids.csv came from #### 
 #load parent id information
 cell.type.hypomap.data.parent.id = read.csv('./data/HypoMap_cluster_parent_ids.csv')
 
 ## add parent id
-cell.type.hypomap.data = cell.type.hypomap.data %>% 
-  left_join(cell.type.hypomap.data.parent.id) %>% 
-  dplyr::select(-c(parent_id))
+cell.type.hypomap.data %>% 
+  left_join(cell.type.hypomap.data.parent.id,
+            by = "parent_id") %>% 
+  dplyr::select(-c(parent_id)) -> cell.type.hypomap.data
 
 ## create metadata of broad cell type
 metadata.mouse.snseq = int.ldfs@meta.data
+
 # add broad cell data
-metadata.mouse.snseq = metadata.mouse.snseq %>% 
+metadata.mouse.snseq %>% 
   left_join(cell.type.hypomap.data %>% 
-              dplyr::rename(predicted = cluster_name))
+              dplyr::rename(predicted = cluster_name),
+            by = "predicted") -> metadata.mouse.snseq
 
 ## select relevant variables
-metadata.mouse.snseq = metadata.mouse.snseq %>% 
+metadata.mouse.snseq %>% 
   column_to_rownames('Cell_ID') %>% 
   dplyr::select(c(predicted,
                   parent_id.exp,
-                  parent_id.broad))
+                  parent_id.broad)) -> metadata.mouse.snseq
 
 ## add metadata to seurat obj
-int.ldfs <- AddMetaData(int.ldfs, metadata.mouse.snseq)
+int.ldfs <- AddMetaData(int.ldfs, 
+                        metadata.mouse.snseq)
 
 #### add unknown cells ####
 #### project_query prob cell type score 
@@ -175,8 +178,8 @@ query_seurat_object = project_query(query_seurat_object = query_seurat_object,
                                     reference_map_reduc = mapscvi::reference_hypoMap_downsample@reductions[[reference_reduction]],
                                     reference_map_umap = mapscvi::reference_hypoMap_downsample@reductions[[paste0("umap_",reference_reduction)]],
                                     query_reduction = "scvi",
-                                    label_vec =cluster_labels,
-                                    result_type="all") 
+                                    label_vec = cluster_labels,
+                                    result_type = "all") 
 
 ## add unknown 
 ### use prediction probability to assign cell type
@@ -187,13 +190,13 @@ tmp = project_query(query_seurat_object = query_seurat_object,
                     reference_map_reduc = mapscvi::reference_hypoMap_downsample@reductions[[reference_reduction]],
                     reference_map_umap = mapscvi::reference_hypoMap_downsample@reductions[[paste0("umap_",reference_reduction)]],
                     query_reduction = "scvi",
-                    label_vec =cluster_labels)
+                    label_vec = cluster_labels)
 
 
-tmp.df = tmp@meta.data %>% 
+tmp@meta.data %>% 
   mutate(predicted.prob.tmp = ifelse(prediction_probability >= 0.75,
                                      predicted,
-                                     'Unknown'))
+                                     'Unknown')) -> tmp.df
 
 ## combine dataframes
 predicted.prob.df %>% 
@@ -204,30 +207,26 @@ predicted.prob.df %>%
             join_by(Cell_ID)) %>% 
   column_to_rownames("Cell_ID") -> predicted.prob.df
 
-## create cell type score
-test.df = predicted.prob.df %>%
+# create cell type score
+predicted.prob.df %>%
   mutate(neuron = rowSums(select(., contains(c('GABA', 'GLU'))))) %>%
   mutate(astrocytes = rowSums(select(., contains(c('Astrocytes', 'Tanycytes','Ependymal'))))) %>%
   mutate(oligodendrocytes = rowSums(select(., contains(c('OPC', 'Oligodendrocytes'))))) %>%
   mutate(immune = rowSums(select(., contains(c('Immune'))))) %>%
   mutate(vascular = rowSums(select(., contains(c('ParsTuber'))))) %>%
-  mutate(parstuber = rowSums(select(., contains(c('Fibroblasts', 'Endothelial', 'Mural')))))
-
-## create column for comparison
-test.df = test.df %>% 
+  mutate(parstuber = rowSums(select(., contains(c('Fibroblasts', 'Endothelial', 'Mural'))))) %>% 
+# create column for comparison
   mutate(neuron.keep = ifelse(neuron >= 0.75, 1, 0)) %>% 
   mutate(astrocytes.keep = ifelse(astrocytes >= 0.75, 1, 0)) %>% 
   mutate(oligodendrocytes.keep = ifelse(oligodendrocytes >= 0.75, 1, 0)) %>% 
   mutate(immune.keep = ifelse(immune >= 0.75, 1, 0)) %>% 
   mutate(vascular.keep = ifelse(vascular >= 0.75, 1, 0)) %>% 
-  mutate(parstuber.keep = ifelse(parstuber >= 0.75, 1, 0)) 
-
-## check counts
-test.df = test.df %>% 
+  mutate(parstuber.keep = ifelse(parstuber >= 0.75, 1, 0)) %>% 
+# check counts
   mutate(unknown.count = rowSums(select(., contains(c('.keep'))))) %>% 
-  mutate(unknown.count = as.numeric(unknown.count))
+  mutate(unknown.count = as.numeric(unknown.count)) -> test.df
 
-##graph
+# plot probability distributions
 test.df %>%
   select(c(predicted,
            prediction_probability)) %>% 
@@ -243,7 +242,7 @@ test.df %>%
 ggsave("cell.type.predicted.prob.png",
        width = 25, height = 20)
 
-
+# just neurons
 test.df %>% 
   select(c(neuron,
            predicted.prob.tmp,
@@ -264,6 +263,7 @@ test.df %>%
 ggsave("neuron.score.predicted.prob.png",
        width = 25, height = 20)
 
+# unknown
 test.df %>% 
   select(c(neuron,
            predicted.prob.tmp,
@@ -285,7 +285,7 @@ ggsave("neuron.score.predicted.prob.histo.png",
 
 ### use prediction probability to assign cell type
 # celltype call
-test.df.meta = test.df %>% 
+test.df %>% 
   mutate(predicted.prob = ifelse(unknown.count > 0,
                                  predicted,
                                  'Unknown'),
@@ -295,13 +295,14 @@ test.df.meta = test.df %>%
          parent_id.broad.prob = ifelse(unknown.count > 0,
                                        parent_id.broad,
                                        'Unknown')) %>% 
-  select(predicted.prob, parent_id.exp.prob, parent_id.broad.prob)
+  select(predicted.prob, parent_id.exp.prob, parent_id.broad.prob) -> test.df.meta
 
 ## add metadata to object
 # check
   identical(rownames(test.df.meta), colnames(int.ldfs))
-
-int.ldfs = AddMetaData(int.ldfs, test.df.meta)
+# [1] TRUE
+int.ldfs = AddMetaData(int.ldfs, 
+                       test.df.meta)
 
   save(int.ldfs, file = "./data/integrated_seurat_withHypoMap_predictions.rda",
        compress = compression)
@@ -309,55 +310,26 @@ int.ldfs = AddMetaData(int.ldfs, test.df.meta)
 #### graph comparison ####
 ### graph parent umaps
 ## Prediction broad
-Seurat::DimPlot(int.ldfs,
-                group.by = "parent_id.broad.prob",
-                cols = c('#1b9e77',
-                         '#d95f02',
-                         '#7570b3',
-                         '#e7298a',
-                         '#66a61e',
-                         '#e6ab02',
-                         '#a6761d',
-                         'grey')) +
-  Seurat::NoAxes() 
+DimPlot(int.ldfs,
+        group.by = "parent_id.broad.prob",
+        cols = c('#1b9e77',
+                 '#d95f02',
+                 '#7570b3',
+                 '#e7298a',
+                 '#66a61e',
+                 '#e6ab02',
+                 '#a6761d',
+                 'grey')) +
+  NoAxes() 
 
 ggsave('predicted.broad.UMAP.png',
        height = 10, width = 12)  
 
-# split OPCs and oligodendrocytes and remove ParsTuber
-int.ldfs@meta.data$Cell_Type = int.ldfs@meta.data$parent_id.broad.prob
-int.ldfs@meta.data$Cell_Type = ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-4: Oligo+Precursor" &
-                                        int.ldfs@meta.data$sctype.integrated == "Oligodendrocyte precursor cells",
-                                      "OPCs", ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-4: Oligo+Precursor" &
-                                                       !(int.ldfs@meta.data$sctype.integrated == "Oligodendrocyte precursor cells"),
-                                                     "Oligodendrocytes", ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-1: GLU",
-                                                                                "Glutamatergic neurons", ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-2: GABA",
-                                                                                                                "GABAergic neurons", ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-3: Astro-Ependymal" &
-                                                                                                                                              !(int.ldfs@meta.data$sctype.integrated == "Radial glial cells"),
-                                                                                                                                            "Astrocytes", ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-5: Immune", 
-                                                                                                                                                                 "Microglia", ifelse(int.ldfs@meta.data$parent_id.broad.prob == "C7-7: Vascular",
-                                                                                                                                                                                     "Epithelial Cells", "Unknown")))))))
- 
-
-Seurat::DimPlot(int.ldfs,
-                group.by = "Cell_Type",
-                cols = c('#7570b3',
-                         '#a6761d',
-                         '#d95f02',
-                         '#1b9e77',
-                         '#66a61e',
-                         '#e7298a',
-                         '#e6ab02',
-                         'grey')) +
-  ggtitle("Cell Type Annotation") 
-
-ggsave('assigned.cell_types.UMAP.png',
-       height = 6, width = 8)  
-
 
 ## predicted exp
-Seurat::DimPlot(int.ldfs, group.by = "parent_id.exp.prob") +
-  Seurat::NoAxes() 
+DimPlot(int.ldfs, 
+        group.by = "parent_id.exp.prob") +
+  NoAxes() 
 
 ggsave('predicted.expandedUMAP.png',
        height = 10, width = 15)  
@@ -377,7 +349,7 @@ int.ldfs@meta.data %>%
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1, 
-                                   hjust=1))
+                                   hjust = 1))
 
 ggsave('predicted.cell.counts.broad.png',
        height = 5, width = 8)  
@@ -396,7 +368,7 @@ int.ldfs@meta.data %>%
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1, 
-                                   hjust=1))
+                                   hjust = 1))
 
 ggsave('predicted.cell.counts.expanded.png',
        height = 5, width = 8)  
@@ -417,7 +389,7 @@ int.ldfs@meta.data %>%
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1, 
-                                   hjust=1))
+                                   hjust = 1))
 
 ggsave('predicted.cell.counts.expanded.reduced.png',
        height = 5,
@@ -437,7 +409,7 @@ int.ldfs@meta.data %>%
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1, 
-                                   hjust=1))
+                                   hjust = 1))
 
 ggsave('predicted.cell.counts.predicted.png',
        height = 5, width = 12)
@@ -457,7 +429,7 @@ int.ldfs@meta.data %>%
   theme_bw()+
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1, 
-                                   hjust=1))
+                                   hjust = 1))
 
 ggsave('predicted.cell.counts.predicted.reduced.png',
        height = 5, width = 8)
@@ -501,7 +473,7 @@ int.ldfs@meta.data %>%
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1, 
-                                   hjust=1))
+                                   hjust = 1))
 
 ggsave('neurons.predicted.cell.counts.predicted.reduced.png',
        height = 5, width = 8)
@@ -564,7 +536,7 @@ neuron.cluster.genotype.count %>%
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, 
                                    vjust = 1, 
-                                   hjust=1))
+                                   hjust = 1))
 
 ggsave('neurons.predicted.cell.counts.predicted.reduced.scale.png',
        height = 5, width = 8)
