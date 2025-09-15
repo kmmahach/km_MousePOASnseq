@@ -8,7 +8,7 @@ compression = "xz" # slower, but usually smallest compression
 # load functions 
 source("./functions/DGE_fun.R")
 
-load_packages("tidyverse", "limma", "tidytext", "ggrepel", "ggplot2", "ggpol", "scales",
+load_packages(c("tidyverse", "limma", "tidytext", "ggrepel", "ggplot2", "ggpol", "scales", "svglite"),
               out_prefix = "figures")
 
 #### Concordant/discordant DEGs across clusters ####
@@ -60,7 +60,8 @@ topDEGs <- lapply(DGE_list, \(lst) {
   
   subset_genes <- subset(lst$num_clust, n_clust > 6)
   top_genes <- subset(lst$results, gene %in% subset_genes$gene) %>% 
-    left_join(lst$num_clust) %>% 
+    left_join(lst$num_clust,
+              by = "gene") %>% 
     group_by(contrast) %>%
     slice_max(order_by = n_clust, n = 7)
   
@@ -73,18 +74,19 @@ topDEGs <- lapply(DGE_list, \(lst) {
                   num_genes = results %>% 
                     distinct(contrast, gene) %>% 
                     count(contrast, name = "n_genes") )
+
+
   return(lst.df)
-}
+  }
 )
 
-
 # make df with contrast(cluster), sex, status, gene, logFC, num_genes, and n_clust
-topDEGs <- lapply(topDEGs, \(lst){
+topDEGs <- lapply(topDEGs, \(lst) {
   df = lst$results %>% 
-    left_join(lst$num_clust) %>% 
-    left_join(lst$num_genes)
-  
-  return(df)
+    left_join(lst$num_clust,
+              by = "gene") %>% 
+    left_join(lst$num_genes,
+              by = "contrast")
 })
 
 topDEGs.test <- topDEGs %>% 
