@@ -412,20 +412,30 @@ comparisons = names(All_Neurons)
                                permutation = TRUE,
                                whole = FALSE)
   
+  clean_names <- sub("^tt", "", comps[grepl("^tt", comps)])
+  
   # RedRibbon plot
-   ggRedRibbon(rr, 
-               quadrants = RedRibbon.quads) +
-      coord_fixed(ratio = 1,
-                  clip = "off") +
-      xlab(gsub("_", " ", comps[1])) +
-      ylab(gsub("_", " ", comps[2])) +
-      ggtitle(sub("_", " ", dataset_name)) +
-      theme(plot.title = element_text(size = 25,
-                                      face = "bold"),
-            plot.margin = unit(c(0,0.5,0,0.5), units = "cm")) # top, right, bottom, left
+  prr <- ggRedRibbon(rr, 
+                    quadrants = RedRibbon.quads) +
+    coord_fixed(ratio = 1,
+                clip = "off") +
+    xlab(gsub("_", " ", comps[1])) +    
+    ylab(gsub("_", " ", comps[2])) +
+    ggtitle(sub("_", " ", dataset_name)) +
+    theme(plot.title = element_text(size = 25,
+                                    face = "bold",
+                                    hjust = 0.5),
+          plot.margin = unit(c(0,0.5,0,0.5), units = "cm")) # top, right, bottom, left
+  
+  prr$scales$scales[[2]]$labels = c("higher in Sub", "higher in Dom")
+  prr$scales$scales[[2]]$breaks = c(85, 425)
+  prr$scales$scales[[2]]$name = "Males"
+  prr$scales$scales[[3]]$labels = c("higher in Sub", "higher in Dom")
+  prr$scales$scales[[3]]$breaks = c(150, 500)
+  prr$scales$scales[[3]]$name = "Females"
     
     ggsave(paste0(root.dir, "/manuscriptFigures/main_figs/AllNeurons_RedRibbon_concordance_by_sex.svg"),
-           height = 10, width = 10, dpi = 300)
+           height = 7.5, width = 7.5, dpi = 300)
 
 
 #### Concordant/discordant DEGs across clusters ####
