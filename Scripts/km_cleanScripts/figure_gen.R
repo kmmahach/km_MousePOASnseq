@@ -149,7 +149,7 @@ result3 %>%
             color = "white",
             lwd = 0.8) +
   scale_fill_gradient(low = "white",
-                      high = "#7e38b7",
+                      high = "#4b306e",
                       na.value = "gray95",
                       limits = c(0, 2),
                       name = bquote(plain(" \u2191") * bold("Dom") *
@@ -161,10 +161,10 @@ result3 %>%
             color = "white",
             lwd = 0.8) +
   scale_fill_gradient(low = "white",
-                      high = "#408D8E",
+                      high = "#ffa600",
                       na.value = "gray95",
                       limits = c(0, 2),
-                      name = bquote(plain(" \u2191") * bold("Dom") *
+                      name = bquote(plain(" \u2191") * bold("Sub") *
                                       "\u2640  \u2191" * bold("Sub ") * "\u2642  " *
                                       plain("avg. ") * italic(log[2]*FC))) +
   ggnewscale::new_scale_fill() +
@@ -173,11 +173,11 @@ result3 %>%
             color = "white",
             lwd = 0.8) +
   scale_fill_gradient(low = "white",
-                      high = "#f94449",
+                      high = "#005249",
                       na.value = "gray95",
                       limits = c(0, 2),
-                      name = bquote(plain(" \u2191") * bold("Sub") *
-                                        "\u2640  \u2191" * bold("Dom ") * "\u2642  " *
+                      name = bquote(plain(" \u2191") * bold("Dom") *
+                                        "\u2640  \u2191" * bold("Sub ") * "\u2642  " *
                                         plain("avg. ") * italic(log[2]*FC))) +
   ggnewscale::new_scale_fill() +
   geom_tile(data = subset(result3, quadrant == "downup"),
@@ -185,11 +185,11 @@ result3 %>%
             color = "white",
             lwd = 0.8) +
   scale_fill_gradient(low = "white",
-                      high = "#ff7d00",
+                      high = "#8a124b",
                       na.value = "gray95",
                       limits = c(0, 2),
                       name = bquote(plain(" \u2191") * bold("Sub") *
-                                      "\u2640   \u2191" * bold("Sub ") * "\u2642  " *
+                                      "\u2640   \u2191" * bold("Dom ") * "\u2642  " *
                                       plain("avg. ") * italic(log[2]*FC))) +
   labs(x = "Neuron clusters", y = "cluster marker genes") +
   ggnewscale::new_scale_fill() +
@@ -199,10 +199,10 @@ result3 %>%
                 fill = quadrant),
             alpha = 0) +
   scale_fill_manual(name = "effect of status across sex",
-                    values = c("upup" = "#7e38b7",
-                               "downdown" = "#408D8E",
-                               "updown" = "#f94449",
-                               "downup" = "#ff7d00")) +
+                    values = c("upup" = "#4b306e",
+                               "downdown" = "#ffa600",
+                               "updown" = 	"#005249",
+                               "downup" = "#8a124b")) +
   guides(fill = guide_legend(override.aes = list(alpha = 1))) +
   theme_classic() +
   ggtitle("Differential expression of cluster markers") +
