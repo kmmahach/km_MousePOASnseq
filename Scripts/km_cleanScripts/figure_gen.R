@@ -10,7 +10,7 @@ source("./functions/DGE_fun.R")
 source("./functions/QC_filtering_fun.R")
 
 load_packages(c("tidyverse", "limma", "tidytext", "ggrepel", "ggplot2", "ggpol", "scales", 
-                "svglite", "viridisLite", "patchwork", "Seurat", "RRHO2", "RedRibbon"),
+                "svglite", "viridis", "patchwork", "Seurat", "RRHO2", "RedRibbon"),
               out_prefix = "figures")
 
 #### Figure 2 ####
@@ -98,13 +98,10 @@ conc_genes = intersect(sig_femaleDEGs$gene,
                        sig_maleDEGs$gene)
 
 result2 <- rrho_results %>%
-  # keep only elements that look like clusters
   .[str_detect(names(.), "^cluster\\d+$")] %>%
   imap_dfr(~ {
     cluster_name <- .y
     df <- .x$df
-    
-    # iterate over quadrants
     map_dfr(names(.x$RedRibbon.quads), function(q) {
       pos <- .x$RedRibbon.quads[[q]]$positions
       
@@ -127,72 +124,86 @@ result2 <- result2 %>%
   complete(gene, cluster,
            fill = list(avg.logFC = NA))
 
+
+result3 <- result2 %>%
+  filter(!is.na(quadrant)) %>% 
+  count(gene, cluster) %>%
+  group_by(gene) %>%
+  summarise(total_n = sum(n)) %>%
+  ungroup() %>%
+  mutate(gene = fct_reorder(gene, total_n)) %>% 
+  left_join(result2)
+
+
 # heatmap of cluster markers by avg DE - figure 2C
-result2 %>% 
+result3 %>% 
   filter(is.na(quadrant)) %>% 
   ggplot(aes(x = factor(cluster),
-             y = gene,
+             y = reorder(gene, total_n),
              fill = avg.logFC)) +
   geom_tile(color = "white",
             lwd = 0.8) +
   scale_fill_viridis(na.value = "gray95") +
-  geom_tile(data = subset(result2, quadrant == "upup"),
+  geom_tile(data = subset(result3, quadrant == "upup"),
             aes(fill = avg.logFC),
             color = "white",
             lwd = 0.8) +
   scale_fill_gradient(low = "white",
                       high = "#7e38b7",
                       na.value = "gray95",
-                      limits = c(0, 2)) +
-  labs(fill = "avg.logFC in 'upup' quadrant") +
+                      limits = c(0, 2),
+                      name = bquote(plain(" \u2191") * bold("Dom") *
+                                      "\u2640  \u2191" * bold("Dom ") * "\u2642  " *
+                                      plain("avg. ") * italic(log[2]*FC))) +
   ggnewscale::new_scale_fill() +
-  geom_tile(data = subset(result2, quadrant == "downdown"),
+  geom_tile(data = subset(result3, quadrant == "downdown"),
             aes(fill = avg.logFC),
             color = "white",
             lwd = 0.8) +
   scale_fill_gradient(low = "white",
                       high = "#408D8E",
                       na.value = "gray95",
-                      limits = c(0, 2)) +
-  labs(fill = "avg.logFC in 'downdown' quadrant") +
+                      limits = c(0, 2),
+                      name = bquote(plain(" \u2191") * bold("Dom") *
+                                      "\u2640  \u2191" * bold("Sub ") * "\u2642  " *
+                                      plain("avg. ") * italic(log[2]*FC))) +
   ggnewscale::new_scale_fill() +
-  geom_tile(data = subset(result2, quadrant == "updown"),
+  geom_tile(data = subset(result3, quadrant == "updown"),
             aes(fill = avg.logFC),
             color = "white",
             lwd = 0.8) +
   scale_fill_gradient(low = "white",
                       high = "#f94449",
                       na.value = "gray95",
-                      limits = c(0, 2)) +
-  labs(fill = "avg.logFC in 'updown' quadrant") +
+                      limits = c(0, 2),
+                      name = bquote(plain(" \u2191") * bold("Sub") *
+                                        "\u2640  \u2191" * bold("Dom ") * "\u2642  " *
+                                        plain("avg. ") * italic(log[2]*FC))) +
   ggnewscale::new_scale_fill() +
-  geom_tile(data = subset(result2, quadrant == "downup"),
+  geom_tile(data = subset(result3, quadrant == "downup"),
             aes(fill = avg.logFC),
             color = "white",
             lwd = 0.8) +
   scale_fill_gradient(low = "white",
                       high = "#ff7d00",
                       na.value = "gray95",
-                      limits = c(0, 2)) +
-  labs(fill = "avg.logFC in 'downup' quadrant") +
+                      limits = c(0, 2),
+                      name = bquote(plain(" \u2191") * bold("Sub") *
+                                      "\u2640   \u2191" * bold("Sub ") * "\u2642  " *
+                                      plain("avg. ") * italic(log[2]*FC))) +
   labs(x = "Neuron clusters", y = "cluster marker genes") +
-  # ggnewscale::new_scale_fill() +
-  # geom_tile(data = distinct(drop_na(result2), avg.logFC, quadrant),
-  #           aes(x = 1,
-  #               y = 1,
-  #               fill = quadrant),
-  #           alpha = 0) +
-  # scale_fill_manual(name = "effect of status across sex",
-  #                   values = c("upup" = "#7e38b7",
-  #                              "downdown" = "#408D8E",
-  #                              "updown" = "#f94449",
-  #                              "downup" = "#ff7d00")) +
-  # guides(fill = guide_legend(override.aes = list(values = c("#7e38b7",
-  #                                                           "#408D8E",
-  #                                                           "#f94449",
-  #                                                           "#ff7d00")),
-  #                                                alpha = c(1,1),
-  #                                                shape = c(1,1))) +
+  ggnewscale::new_scale_fill() +
+  geom_tile(data = distinct(drop_na(result3), avg.logFC, quadrant),
+            aes(x = 1,
+                y = 1,
+                fill = quadrant),
+            alpha = 0) +
+  scale_fill_manual(name = "effect of status across sex",
+                    values = c("upup" = "#7e38b7",
+                               "downdown" = "#408D8E",
+                               "updown" = "#f94449",
+                               "downup" = "#ff7d00")) +
+  guides(fill = guide_legend(override.aes = list(alpha = 1))) +
   theme_classic() +
   ggtitle("Differential expression of cluster markers") +
   theme(strip.text.y = element_blank(),
@@ -210,7 +221,8 @@ result2 %>%
 
 ggsave(paste0(root.dir, "/manuscriptFigures/main_figs/cluster_marker.quads.svg"),
        device = "svg", width = 9.25, height = 16)
-
+ggsave(paste0(root.dir, "/manuscriptFigures/main_figs/cluster_marker.quads.png"),
+       width = 9.25, height = 16)
 
 # cluster composition by group + number of cells - figure 2D
 # create counts table - sample by cluster
@@ -316,7 +328,7 @@ p6 <- p1 +
                        alpha = 0.75)
 
 
-ggsave(paste0(root.dir, '/manuscriptFigures/main_figs/composition_neuron.clusters_byPct_Num.png'),
+ggsave(paste0(root.dir, '/manuscriptFigures/main_figs/composition_neuron.clusters_byPct_Num.svg'),
        p6 + p5 +
          plot_layout(ncol = 2, widths = c(
            MSCneurons.reclust@meta.data$orig.ident %>% 
@@ -412,7 +424,7 @@ comparisons = names(All_Neurons)
                                permutation = TRUE,
                                whole = FALSE)
   
-  clean_names <- sub("^tt", "", comps[grepl("^tt", comps)])
+  # clean_names <- sub("^tt", "", comps[grepl("^tt", comps)])
   
   # RedRibbon plot
   prr <- ggRedRibbon(rr, 
@@ -421,7 +433,7 @@ comparisons = names(All_Neurons)
                 clip = "off") +
     xlab(gsub("_", " ", comps[1])) +    
     ylab(gsub("_", " ", comps[2])) +
-    ggtitle(sub("_", " ", dataset_name)) +
+    ggtitle("All Neurons") +
     theme(plot.title = element_text(size = 25,
                                     face = "bold",
                                     hjust = 0.5),
@@ -429,16 +441,16 @@ comparisons = names(All_Neurons)
   
   prr$scales$scales[[2]]$labels = c("higher in Sub", "higher in Dom")
   prr$scales$scales[[2]]$breaks = c(85, 425)
-  prr$scales$scales[[2]]$name = "Males"
+  prr$scales$scales[[2]]$name = "Females"
   prr$scales$scales[[3]]$labels = c("higher in Sub", "higher in Dom")
   prr$scales$scales[[3]]$breaks = c(150, 500)
-  prr$scales$scales[[3]]$name = "Females"
+  prr$scales$scales[[3]]$name = "Males"
     
     ggsave(paste0(root.dir, "/manuscriptFigures/main_figs/AllNeurons_RedRibbon_concordance_by_sex.svg"),
            height = 7.5, width = 7.5, dpi = 300)
 
 
-#### Concordant/discordant DEGs across clusters ####
+#### Most common DEGs across clusters ####
 setwd(paste0(root.dir, "/DGE_CellTypes/")) 
 
 # data 
@@ -561,7 +573,7 @@ topDEGs %>%
 ggsave(paste0(root.dir, "/manuscriptFigures/main_figs/topDEGs_byCluster.svg"),
        device = "svg", width = 12, height = 6) 
 
-
+#### figure out where to put this figure (if keeping it)
 # overlap with cluster marker genes 
 neuron_clusterMarkers <- read_csv('neurons/cluster_stats/neuron_clusterMarkers_weighted.csv')
 
@@ -655,124 +667,10 @@ result.test %>%
         plot.margin = unit(c(1, 1, 1, 1), "cm")) +
   coord_fixed()
 
-ggsave(paste0(root.dir, "/manuscriptFigures/main_figs/cluster_marker.DEGs.svg"),
+ggsave(paste0(root.dir, "/manuscriptFigures/supplemental/cluster_marker.DEGs.svg"),
        device = "svg", width = 9.25, height = 16)
 
 
-# color by enrichment quadrant from RRHO to indicate direction
-result2 <- rrho_results %>%
-  # keep only elements that look like clusters
-  .[str_detect(names(.), "^cluster\\d+$")] %>%
-  imap_dfr(~ {
-    cluster_name <- .y
-    df <- .x$df
-    
-    # iterate over quadrants
-    map_dfr(names(.x$RedRibbon.quads), function(q) {
-      pos <- .x$RedRibbon.quads[[q]]$positions
-      
-      df[pos, ] %>%
-        transmute(
-          gene,
-          cluster = str_extract(cluster_name, "\\d+"),
-          quadrant = q,
-          avg.logFC = (abs(a) + abs(b)) / 2
-        ) 
-    })
-  })
-
-neuron_clusterMarkers_hiSpec <- neuron_clusterMarkers %>% 
-  filter(specificity > 0.1)
-
-result2 <- result2 %>% 
-  filter(gene %in% neuron_clusterMarkers_hiSpec$gene &
-           avg.logFC > 1) %>% 
-  complete(gene, cluster,
-           fill = list(avg.logFC = NA))
-
-
-result2 %>% 
-  filter(is.na(quadrant)) %>% 
-  ggplot(aes(x = factor(cluster),
-             y = gene,
-             fill = avg.logFC)) +
-  geom_tile(color = "white",
-            lwd = 0.8) +
-  scale_fill_viridis(na.value = "gray95") +
-  geom_tile(data = subset(result2, quadrant == "upup"),
-            aes(fill = avg.logFC),
-            color = "white",
-            lwd = 0.8) +
-  scale_fill_gradient(low = "white",
-                      high = "#7e38b7",
-                      na.value = "gray95",
-                      limits = c(0, 2)) +
-  labs(fill = "avg.logFC in 'upup' quadrant") +
-  ggnewscale::new_scale_fill() +
-  geom_tile(data = subset(result2, quadrant == "downdown"),
-            aes(fill = avg.logFC),
-            color = "white",
-            lwd = 0.8) +
-  scale_fill_gradient(low = "white",
-                      high = "#408D8E",
-                      na.value = "gray95",
-                      limits = c(0, 2)) +
-  labs(fill = "avg.logFC in 'downdown' quadrant") +
-  ggnewscale::new_scale_fill() +
-  geom_tile(data = subset(result2, quadrant == "updown"),
-            aes(fill = avg.logFC),
-            color = "white",
-            lwd = 0.8) +
-  scale_fill_gradient(low = "white",
-                      high = "#f94449",
-                      na.value = "gray95",
-                      limits = c(0, 2)) +
-  labs(fill = "avg.logFC in 'updown' quadrant") +
-  ggnewscale::new_scale_fill() +
-  geom_tile(data = subset(result2, quadrant == "downup"),
-            aes(fill = avg.logFC),
-            color = "white",
-            lwd = 0.8) +
-  scale_fill_gradient(low = "white",
-                      high = "#ff7d00",
-                      na.value = "gray95",
-                      limits = c(0, 2)) +
-  labs(fill = "avg.logFC in 'downup' quadrant") +
-  labs(x = "Neuron clusters", y = "cluster marker genes") +
-  # ggnewscale::new_scale_fill() +
-  # geom_tile(data = distinct(drop_na(result2), avg.logFC, quadrant),
-  #           aes(x = 1,
-  #               y = 1,
-  #               fill = quadrant),
-  #           alpha = 0) +
-  # scale_fill_manual(name = "effect of status across sex",
-  #                   values = c("upup" = "#7e38b7",
-  #                              "downdown" = "#408D8E",
-  #                              "updown" = "#f94449",
-  #                              "downup" = "#ff7d00")) +
-  # guides(fill = guide_legend(override.aes = list(values = c("#7e38b7",
-  #                                                           "#408D8E",
-  #                                                           "#f94449",
-  #                                                           "#ff7d00")),
-  #                                                alpha = c(1,1),
-  #                                                shape = c(1,1))) +
-  theme_classic() +
-  ggtitle("Differential expression of cluster markers") +
-  theme(strip.text.y = element_blank(),
-        panel.spacing = unit(1, "mm"),
-        plot.title = element_text(hjust = 0, size = 22),
-        axis.text.x = element_text(angle = 45, vjust = 0.65, size = 13),
-        axis.title.x = element_text(size = 21),
-        axis.title.y = element_text(size = 21),
-        axis.text.y = element_text(size = 12),
-        axis.title = element_text(size = 15),
-        legend.title = element_text(size = 18, face = "italic"),
-        legend.text = element_text(size = 15, face = "bold"),
-        plot.margin = unit(c(1, 1, 1, 1), "cm")) +
-  coord_fixed()
-
-ggsave(paste0(root.dir, "/manuscriptFigures/main_figs/cluster_marker.quads.svg"),
-       device = "svg", width = 9.25, height = 16)
 
 #### Oxytocin and Vasopressin DE by cluster #### 
 setwd(paste0(root.dir, "/DGE_CellTypes/")) 
@@ -837,6 +735,40 @@ norm_counts %>%
 
 ggsave(paste0(root.dir, "/manuscriptFigures/supplemental/avpExpr_byCluster.svg"),
        device = "svg", width = 10, height = 7)
+
+#### Supplemental Figure 1 ####
+setwd(paste0(root.dir, "/Scripts/km_cleanScripts/"))
+load("./data/rawdata_withGeneByCell_counts.rda")
+load("./data/souporcell_output.rda")
+
+l.dfs <- make.seurat.obj(l.df2) 
+# add metadata
+l.dfs <- map2(l.dfs, l.clust, ~ { AddMetaData(.x, metadata = .y) })
+
+# label mitochondrial genes
+lapply(l.dfs, \(x) {
+  PercentageFeatureSet(x, pattern = "^mt-",
+                       col.name = "percent.mt") 
+ } 
+) -> l.dfs
+
+# choose filter cutoffs 
+filter.categories <- c("nFeature_min", "nFeature_max", "mito.max")
+  fdf <- c(700, 1400, 5)
+  fsf <- c(700, 1500, 5)
+  mdf <- c(700, 3000, 5)
+  msf <- c(700, 2500, 5)
+
+filters <- matrix(rbind(fdf,fsf,mdf,msf),
+                  nrow = length(l.dfs),
+                  ncol = length(filter.categories),
+                  dimnames = list(names(l.dfs),
+                                  filter.categories))
+
+# plot filtered QC metrics - supp fig 1
+plot.filters(l.dfs, filters, 
+             outdir = paste0(root.dir, "/manuscriptFigures/supplemental/"))
+
 
 #### Supplemental Figure 4 ####
 setwd(paste0(root.dir, "/HypoMap"))
