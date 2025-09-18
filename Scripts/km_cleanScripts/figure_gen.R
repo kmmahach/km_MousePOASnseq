@@ -221,8 +221,6 @@ result3 %>%
 
 ggsave(paste0(root.dir, "/manuscriptFigures/main_figs/cluster_marker.quads.svg"),
        device = "svg", width = 9.25, height = 16)
-ggsave(paste0(root.dir, "/manuscriptFigures/main_figs/cluster_marker.quads.png"),
-       width = 9.25, height = 16)
 
 # cluster composition by group + number of cells - figure 2D
 # create counts table - sample by cluster
@@ -450,129 +448,6 @@ comparisons = names(All_Neurons)
            height = 7.5, width = 7.5, dpi = 300)
 
 
-#### Most common DEGs across clusters ####
-setwd(paste0(root.dir, "/DGE_CellTypes/")) 
-
-# data 
-load("./neurons/all_neurons/limma_perm/limma_perm_results.rda")
-load("./neurons/all_neurons/limma_perm/rrho_results.rda")
-
-subset_by_sex <- function(limma_list,
-                          logFC_threshold = 0.2,
-                          min_pval = 0.05) 
-{
-  sublist <- lapply(limma_list, \(lst) {
-    lst <- subset(lst, abs(lst$logFC) > logFC_threshold &
-                    lst$P.Value < min_pval)
-  }
-  )
-  
-  Females <- subset(sublist, grepl("^[F]", names(sublist))==TRUE)  
-  Males <- subset(sublist, grepl("^[M]", names(sublist))==TRUE)  
-  
-  newlist <- as_named_list(Females, Males)
-  
-  np_DGE <- lapply(newlist, \(df) {
-    
-    results = bind_rows(df, .id = "contrast") %>% 
-      mutate(contrast = sub(".*_", "", contrast))
-    
-    newdf <- list( results = results,
-                   num_clust = results %>%
-                     distinct(gene, contrast) %>%
-                     count(gene, name = "n_clust"),      
-                   num_genes = results %>% 
-                     distinct(contrast, gene) %>% 
-                     count(contrast, name = "n_genes") )
-    return(newdf)
-  }
-  ) 
-  return(np_DGE)
-}
-
-
-DGE_list <- subset_by_sex(limma_list)
-
-
-# DE in > 6 clusters/subtypes, get top genes DE in the most clusters
-topDEGs <- lapply(DGE_list, \(lst) {
-  
-  subset_genes <- subset(lst$num_clust, n_clust > 6)
-  top_genes <- subset(lst$results, gene %in% subset_genes$gene) %>% 
-    left_join(lst$num_clust,
-              by = "gene") %>% 
-    group_by(contrast) %>%
-    slice_max(order_by = n_clust, n = 7)
-  
-  results <- subset(lst$results, gene %in% top_genes$gene)
-  
-  lst.df <- list( results = results,
-                  num_clust = results %>%
-                    distinct(gene, contrast) %>%
-                    count(gene, name = "n_clust"),      
-                  num_genes = results %>% 
-                    distinct(contrast, gene) %>% 
-                    count(contrast, name = "n_genes") )
-
-
-  return(lst.df)
-  }
-)
-
-# make df with contrast(cluster), sex, status, gene, logFC, num_genes, and n_clust
-topDEGs <- lapply(topDEGs, \(lst) {
-  df = lst$results %>% 
-    left_join(lst$num_clust,
-              by = "gene") %>% 
-    left_join(lst$num_genes,
-              by = "contrast")
-})
-
-topDEGs.test <- topDEGs %>% 
-  bind_rows(.id = "Sex") %>% 
-  mutate(Status = ifelse(logFC > 0, "Dom", "Sub")) 
-
-topDEGs %>% 
-  bind_rows(.id = "Sex") %>% 
-  mutate(Status = ifelse(logFC > 0, "Dom", "Sub")) %>% 
-  mutate(contrast = reorder_within(contrast, -n_genes, Sex),   
-         gene = reorder_within(gene, n_clust, Sex)) %>%
-  ggplot(aes(x = contrast, 
-             y = gene, 
-             fill = logFC)) +
-  geom_tile(color = "grey90") +
-  labs(x = "neuronal subgroups", 
-       y = "top DEGs") +
-  scale_fill_gradient2(name = bquote(~italic(log[2]~FC))) +
-  ggnewscale::new_scale_fill() +
-  geom_tile(data = distinct(topDEGs.test, Status, logFC),
-            aes(x = 1, 
-                y = 1, 
-                fill = Status), 
-            alpha = 0) +
-  scale_fill_manual(name = paste0(sprintf("\u2191 \u2191"), " expr in"),
-                    values = c("Dom" = muted("blue"), "Sub" = muted("red"))) +
-  guides(fill = guide_legend(override.aes = list(values = c(muted("blue"),
-                                                            muted("red")),
-                                                 alpha = c(1,1),
-                                                 shape = c(1,1)))) +
-  theme_classic() +
-  facet_wrap(~ Sex, scales = "free") +
-  scale_x_reordered() +
-  scale_y_reordered() +
-  ggtitle("DEGs across clusters") +
-  theme(plot.title = element_text(hjust = 0.5, size = 20),
-        strip.text = element_text(face = "bold", size = 15),
-        axis.text.x = element_text(angle = 45, vjust = 0.65,
-                                   face = "italic", size = 10),
-        axis.text.y = element_text(size = 12),
-        axis.title = element_text(size = 15),
-        legend.title = element_text(size = 15, face = "italic"),
-        legend.text = element_text(size = 12, face = "bold"))
-
-ggsave(paste0(root.dir, "/manuscriptFigures/main_figs/topDEGs_byCluster.svg"),
-       device = "svg", width = 12, height = 6) 
-
 #### figure out where to put this figure (if keeping it)
 # overlap with cluster marker genes 
 neuron_clusterMarkers <- read_csv('neurons/cluster_stats/neuron_clusterMarkers_weighted.csv')
@@ -671,6 +546,153 @@ ggsave(paste0(root.dir, "/manuscriptFigures/supplemental/cluster_marker.DEGs.svg
        device = "svg", width = 9.25, height = 16)
 
 
+#### Figure 3 ####
+setwd(paste0(root.dir, "/DGE_CellTypes"))
+
+# fig 3A
+#### load data ####
+load("./neurons/all_neurons/limma_perm/limma_perm_results.rda") 
+neuropeptides = read.csv(paste0(net.dir, '/seurat/gene.lists/neuropeptides.list.csv'))
+load(paste0(root.dir, "/HypoMap/data/integrated_seurat_withHypoMap_predictions.rda"))
+
+# set idents
+Idents(object = int.ldfs) <- "parent_id.broad.prob"
+# subset with RNA counts
+DefaultAssay(int.ldfs) = "RNA"
+# subset to neurons
+int.ldfs = subset(int.ldfs,
+                  idents = c("C7-2: GABA", "C7-1: GLU"))
+
+subset_by_sex <- function(limma_list,
+                          subset_genes = top25) {
+  
+  genes <- subset_genes$gene
+  
+  sublist <- lapply(limma_list, \(lst) {
+    lst <- subset(lst, lst$gene %in% genes)
+  }
+  )
+  
+  Females <- subset(sublist, grepl("^[F]", names(sublist))==TRUE)  
+  Males <- subset(sublist, grepl("^[M]", names(sublist))==TRUE)  
+  
+  newlist <- as_named_list(Females, Males)
+  
+  np_DGE <- lapply(newlist, \(x) {
+    x <- bind_rows(x, .id = "contrast") %>% 
+      left_join(subset_genes, 
+                by = 'gene') %>% 
+      mutate(logFC = ifelse(P.Value < 0.05, logFC, 0)) %>% 
+      mutate(contrast = sub(".*_", "", contrast))
+  }
+  ) 
+  return(np_DGE)
+}
+
+
+# genes
+neuropeptides %>% 
+  rename(gene = Gene.name) %>% 
+  mutate(gene = str_to_title(gene)) %>% 
+  filter(gene %in% rownames(int.ldfs)) -> neuropeptides.genes
+
+# 68 NPs after filtering
+unlist(as.vector(neuropeptides.genes$gene)) -> neuropeptides.genes
+
+# subset Seurat object by neuropeptide.genes
+sub.MSCneurons <- subset_by_gene(int.ldfs,
+                                 neuropeptides.genes,
+                                 slot = "counts",
+                                 min_count = 2)
+
+# get presence/absence (1/0) for neuropeptide.genes
+umap = data.frame(int.ldfs@reductions$umap@cell.embeddings) %>%
+  rownames_to_column('Cell_ID')
+
+metadata = data.frame(int.ldfs@meta.data) %>%
+  full_join(umap, by = "Cell_ID")
+
+sapply(
+  names(sub.MSCneurons), \(sub_name) {
+    all_cells = metadata$Cell_ID
+    as.integer(all_cells %in% sub.MSCneurons[[sub_name]]@meta.data$Cell_ID)
+  }
+) %>%
+  as.data.frame() %>%
+  mutate(Cell_ID = metadata$Cell_ID) -> bin_df
+
+select_neur = full_join(metadata, bin_df, by = "Cell_ID")
+
+sum_neur <- select_neur %>%
+  summarise(total.cells = n(),
+            across(all_of(names(sub.MSCneurons)),
+                   list(sum = ~ sum(.x),
+                        pct = ~ (sum(.x) / n()) * 100),
+                   .names = "{fn}_{.col}"),
+            .groups = "drop")
+
+# get top 25 NPs 
+sum_neur %>% 
+  pivot_longer(
+    cols = starts_with("sum_"),
+    names_to = "gene",
+    names_prefix = "sum_",
+    values_to = "cell_count"
+  ) %>% 
+  dplyr::select(gene, cell_count) %>% 
+  filter(cell_count >= quantile(cell_count, 0.75)) -> top25
+
+np_DGE <- subset_by_sex(limma_list) %>% 
+  bind_rows(., .id = "sex") %>% 
+  mutate(group = ifelse(logFC > 0, "Dom", "Sub"))
+
+ggplot(np_DGE, aes(x = reorder(gene, -cell_count), 
+                   y = contrast,
+                   fill = logFC)) +
+  labs(x = "top 25 expressed neuropeptides",
+       y = "neuronal subgroup") +
+  geom_tile(color = "grey90") + 
+  scale_fill_gradient2(name = bquote(~italic(log[2]~FC)),
+                       low = muted("red"),
+                       high = muted("blue")) +
+  ggnewscale::new_scale_fill() +
+  geom_tile(data = distinct(np_DGE, group, logFC),
+            aes(x = 1, y = 1, 
+                fill = group), 
+            alpha = 0) +
+  # scale_fill_manual(name = paste0(sprintf("\u2191 \u2191"), " expr in"),
+  #                   values = c("Dom" = muted("blue"), 
+  #                              "Sub" = muted("red"))) +
+  # guides(fill = guide_legend(override.aes = list(values = c(muted("blue"), 
+  #                                                           muted("red")),
+  #                                                alpha = c(1,1), 
+  #                                                shape = c(1,1)))) +
+  scale_fill_manual(name = paste0(sprintf("\u2191 \u2191"), " expr in"),
+                    values = c("Dom" = muted("red"), 
+                               "Sub" = muted("blue"))) +
+  guides(fill = guide_legend(override.aes = 
+                               list(values = c(muted("red"), 
+                                               muted("blue")),
+                                    alpha = c(1,1),
+                                    shape = c(1,1)))) +
+  theme_classic() +
+  facet_wrap(~ sex) +
+  ggtitle("Differential Expression of Neuropeptides in Neuronal Nuclei") +
+  theme(plot.title = element_text(hjust = 0.5, size = 20),
+        strip.text = element_text(face = "bold", size = 15),
+        axis.text.x = element_text(angle = 45, 
+                                   vjust = 0.75,
+                                   face = "italic",
+                                   size = 10),
+        axis.text.y = element_text(size = 12),
+        axis.title = element_text(size = 15),
+        legend.title = element_text(size = 15,
+                                    face = "italic"),
+        legend.text = element_text(size = 12,
+                                   face = "bold"))
+
+ggsave(paste0(root.dir, '/manuscriptFigures/main_figs/DEGneuropeptides_byCluster.svg'),
+       width = 10, height = 5)
 
 #### Oxytocin and Vasopressin DE by cluster #### 
 setwd(paste0(root.dir, "/DGE_CellTypes/")) 
@@ -1007,6 +1029,83 @@ ggsave(paste0(root.dir, "/manuscriptFigures/supplemental/onlyFem_all_volcano_plo
 #### Supplemental Figure 6 ####
 setwd(paste0(root.dir, "/DGE_CellTypes/")) 
 
+# cluster marker specificity scores - supp fig 6A
+neuron.markers.df <- read_csv('neurons/cluster_stats/neuron_clusterMarkers.csv')
+load(paste0(root.dir, "/Scripts/km_cleanScripts/data/integrated_seurat_onlyNeurons.rda"))
+
+# add weights for neuron proportions to specificity
+MSCneurons.reclust@meta.data %>% 
+  group_by(seurat_clusters) %>% 
+  summarise(n_cells = n()) %>% 
+  mutate(prop = n_cells / sum(n_cells),
+         seurat_clusters = as.numeric(seurat_clusters) - 1) %>% 
+  rename(cluster = seurat_clusters) -> neuron.props
+
+neuron.markers.df %>% 
+  left_join(neuron.props,
+            by = "cluster") %>% 
+  mutate(specificity = ifelse(specificity < 0, 
+                              specificity * prop * -1,
+                              specificity * prop)) -> markers.weighted.spec
+
+write_csv(markers.weighted.spec, 'neurons/cluster_stats/neuron_clusterMarkers_weighted.csv')
+
+top6_genes = markers.weighted.spec %>% 
+  group_by(cluster) %>% 
+  slice_max(specificity, 
+            n = 6) %>% 
+  ungroup() 
+
+top6_genes %>% 
+  group_by(gene) %>%
+  slice_max(specificity, n = 1) %>%
+  dplyr::select(gene, cluster) %>% 
+  rename(top_clust = cluster) %>% 
+  distinct() -> markers.weighted.summary
+
+
+markers.weighted.spec %>%
+  dplyr::select(cluster,gene,specificity) %>% 
+  filter(gene %in% top6_genes$gene) %>% 
+  complete(gene, cluster, 
+           fill = list(specificity = NA)) %>% 
+  left_join(markers.weighted.summary, by = "gene") -> markers.df
+
+
+markers.df %>% 
+  mutate(specificity = ifelse(specificity < 0.02, NA, specificity)) %>%
+  ggplot(aes(x = factor(cluster),
+             y = gene,
+             fill = specificity)) +
+  geom_tile(color = "white",
+            lwd = 0.8) +
+  labs(x = "Neuron clusters", y = "Marker genes") +
+  scale_fill_viridis(option = "plasma", 
+                     na.value = "gray95",
+                     name = "Specificity score",
+                     direction = -1, 
+                     begin = 0.0, end = 0.9) +
+  facet_grid(top_clust ~ ., 
+             scales = "free_y", 
+             space = "free_y") +
+  theme_classic() +
+  ggtitle("Cluster Marker Genes") +
+  theme(strip.text.y = element_blank(),
+        panel.spacing = unit(1, "mm"),
+        plot.title = element_text(hjust = 0.5, size = 25),
+        axis.text.x = element_text(angle = 45, vjust = 0.65, size = 11),
+        axis.title.x = element_text(size = 25),
+        axis.title.y = element_text(size = 25),
+        axis.text.y = element_text(size = 12),
+        axis.title = element_text(size = 17),
+        legend.title = element_text(size = 20, face = "italic"),
+        legend.text = element_text(size = 17, face = "bold"),
+        plot.margin = unit(c(1, 1, 1, 1), "cm"))
+
+ggsave(paste0(root.dir, "/manuscriptFigures/supplemental/cluster_markers_spec.svg"),
+       width = 7.5, height = 15)
+
+
 # data for DEG x clusters heatmap - figure 6C 
 load("./neurons/all_neurons/limma_perm/limma_perm_results.rda")
 load("./neurons/all_neurons/limma_perm/rrho_results.rda")
@@ -1129,6 +1228,9 @@ ggsave(paste0(root.dir, "/manuscriptFigures/supplemental/topDEGs_byCluster.svg")
 
 # overlap with cluster marker genes 
 neuron_clusterMarkers <- read_csv('neurons/cluster_stats/neuron_clusterMarkers_weighted.csv')
+femaleDEGs <- limma_list$Fdom_vs_sub_all
+maleDEGs <- limma_list$Mdom_vs_sub_all
+
 
 sig_maleDEGs <- maleDEGs %>% 
   filter(abs(logFC) > 0.2, P.Value < 0.05)
@@ -1220,121 +1322,6 @@ result.test %>%
         plot.margin = unit(c(1, 1, 1, 1), "cm")) +
   coord_fixed()
 
-ggsave(paste0(root.dir, "/manuscriptFigures/main_figs/cluster_marker.DEGs.svg"),
-       device = "svg", width = 9.25, height = 16)
+ggsave(paste0(root.dir, "/manuscriptFigures/supplemental/cluster_marker.DEGs.svg"),
+       width = 9.25, height = 16)
 
-
-# color by enrichment quadrant from RRHO to indicate direction
-result2 <- rrho_results %>%
-  # keep only elements that look like clusters
-  .[str_detect(names(.), "^cluster\\d+$")] %>%
-  imap_dfr(~ {
-    cluster_name <- .y
-    df <- .x$df
-    
-    # iterate over quadrants
-    map_dfr(names(.x$RedRibbon.quads), function(q) {
-      pos <- .x$RedRibbon.quads[[q]]$positions
-      
-      df[pos, ] %>%
-        transmute(
-          gene,
-          cluster = str_extract(cluster_name, "\\d+"),
-          quadrant = q,
-          avg.logFC = (abs(a) + abs(b)) / 2
-        ) 
-    })
-  })
-
-neuron_clusterMarkers_hiSpec <- neuron_clusterMarkers %>% 
-  filter(specificity > 0.1)
-
-result2 <- result2 %>% 
-  filter(gene %in% neuron_clusterMarkers_hiSpec$gene &
-           avg.logFC > 1) %>% 
-  complete(gene, cluster,
-           fill = list(avg.logFC = NA))
-
-
-result2 %>% 
-  filter(is.na(quadrant)) %>% 
-  ggplot(aes(x = factor(cluster),
-             y = gene,
-             fill = avg.logFC)) +
-  geom_tile(color = "white",
-            lwd = 0.8) +
-  scale_fill_viridis(na.value = "gray95") +
-  geom_tile(data = subset(result2, quadrant == "upup"),
-            aes(fill = avg.logFC),
-            color = "white",
-            lwd = 0.8) +
-  scale_fill_gradient(low = "white",
-                      high = "#7e38b7",
-                      na.value = "gray95",
-                      limits = c(0, 2)) +
-  labs(fill = "avg.logFC in 'upup' quadrant") +
-  ggnewscale::new_scale_fill() +
-  geom_tile(data = subset(result2, quadrant == "downdown"),
-            aes(fill = avg.logFC),
-            color = "white",
-            lwd = 0.8) +
-  scale_fill_gradient(low = "white",
-                      high = "#408D8E",
-                      na.value = "gray95",
-                      limits = c(0, 2)) +
-  labs(fill = "avg.logFC in 'downdown' quadrant") +
-  ggnewscale::new_scale_fill() +
-  geom_tile(data = subset(result2, quadrant == "updown"),
-            aes(fill = avg.logFC),
-            color = "white",
-            lwd = 0.8) +
-  scale_fill_gradient(low = "white",
-                      high = "#f94449",
-                      na.value = "gray95",
-                      limits = c(0, 2)) +
-  labs(fill = "avg.logFC in 'updown' quadrant") +
-  ggnewscale::new_scale_fill() +
-  geom_tile(data = subset(result2, quadrant == "downup"),
-            aes(fill = avg.logFC),
-            color = "white",
-            lwd = 0.8) +
-  scale_fill_gradient(low = "white",
-                      high = "#ff7d00",
-                      na.value = "gray95",
-                      limits = c(0, 2)) +
-  labs(fill = "avg.logFC in 'downup' quadrant") +
-  labs(x = "Neuron clusters", y = "cluster marker genes") +
-  # ggnewscale::new_scale_fill() +
-  # geom_tile(data = distinct(drop_na(result2), avg.logFC, quadrant),
-  #           aes(x = 1,
-  #               y = 1,
-  #               fill = quadrant),
-  #           alpha = 0) +
-  # scale_fill_manual(name = "effect of status across sex",
-  #                   values = c("upup" = "#7e38b7",
-  #                              "downdown" = "#408D8E",
-  #                              "updown" = "#f94449",
-  #                              "downup" = "#ff7d00")) +
-  # guides(fill = guide_legend(override.aes = list(values = c("#7e38b7",
-  #                                                           "#408D8E",
-  #                                                           "#f94449",
-  #                                                           "#ff7d00")),
-  #                                                alpha = c(1,1),
-  #                                                shape = c(1,1))) +
-  theme_classic() +
-  ggtitle("Differential expression of cluster markers") +
-  theme(strip.text.y = element_blank(),
-        panel.spacing = unit(1, "mm"),
-        plot.title = element_text(hjust = 0, size = 22),
-        axis.text.x = element_text(angle = 45, vjust = 0.65, size = 13),
-        axis.title.x = element_text(size = 21),
-        axis.title.y = element_text(size = 21),
-        axis.text.y = element_text(size = 12),
-        axis.title = element_text(size = 15),
-        legend.title = element_text(size = 18, face = "italic"),
-        legend.text = element_text(size = 15, face = "bold"),
-        plot.margin = unit(c(1, 1, 1, 1), "cm")) +
-  coord_fixed()
-
-ggsave(paste0(root.dir, "/manuscriptFigures/main_figs/cluster_marker.quads.svg"),
-       device = "svg", width = 9.25, height = 16)
