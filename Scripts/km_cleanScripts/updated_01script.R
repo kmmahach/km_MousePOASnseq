@@ -136,7 +136,6 @@ filters <- matrix(rbind(fdf,fsf,mdf,msf),
 # visualize
   plot.feature.scatter(l.dfs, filters, qc_plots_path)
   check.filters(l.dfs, filters, qc_plots_path)
-  # supplemental fig 1
   plot.filters(l.dfs, filters, qc_plots_path)
   
 fltr.ldfs <- make.filtered.seurat(l.dfs, filters)

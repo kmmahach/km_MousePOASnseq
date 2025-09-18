@@ -696,6 +696,7 @@ check.filters <- function(list_of_SeuratObj,
 # nCount_RNA x nFeature_RNA with nFeature_RNA histo before and after applying filters
 plot.filters <- function(list_of_SeuratObj,
                          filters,
+                         filetype = ".png",
                          outdir = NULL) {
   
   stopifnot("`filters` must be numeric" = is.numeric(filters))
@@ -804,12 +805,12 @@ plot.filters <- function(list_of_SeuratObj,
       
       plotname <- paste0(outdir, "/", title, 
                          "/filtering.feature.plots.", 
-                         title, ".png")
+                         title, filetype)
       
     } else {
       
       plotname <- paste0(outdir, "/filtering.feature.plots.",
-                         title, ".png")
+                         title, filetype)
     }
     
     plots <- arrangeGrob(scatter1, scatter2, hist1, hist2,
