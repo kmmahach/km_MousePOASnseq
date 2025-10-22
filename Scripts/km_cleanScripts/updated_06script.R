@@ -16,17 +16,17 @@ load_packages(c("Seurat", "sp", "DEsingle", "pheatmap", "metan", "clustree", "pa
 
 
 #### load data ####
-load(paste0(root.dir, "/HypoMap/data/integrated_seurat_withHypoMap_predictions.rda"))
+load("./data/integrated_seurat_onlyNeurons.rda")
 
 # set idents
-Idents(object = int.ldfs) <- "parent_id.broad.prob"
+Idents(object = MSCneurons.reclust) <- "parent_id.broad.prob"
 
 # subset to neurons
-int.ldfs = subset(int.ldfs,
+MSCneurons.reclust = subset(MSCneurons.reclust,
                   idents = c("C7-2: GABA", "C7-1: GLU"))
 
 # subset with RNA counts
-DefaultAssay(int.ldfs) = "RNA"
+DefaultAssay(MSCneurons.reclust) = "RNA"
 
 #### Neuropeptide candidates ####
 setwd(paste0(root.dir, "/DGE_CellTypes"))
@@ -38,22 +38,21 @@ neuropeptides = read.csv(paste0(net.dir, '/seurat/gene.lists/neuropeptides.list.
 neuropeptides %>% 
   rename(gene = Gene.name) %>% 
   mutate(gene = str_to_title(gene)) %>% 
-  filter(gene %in% rownames(int.ldfs)) -> neuropeptides.genes
+  filter(gene %in% rownames(MSCneurons.reclust)) -> neuropeptides.genes
 
-# 68 NPs after filtering
 unlist(as.vector(neuropeptides.genes$gene)) -> neuropeptides.genes
 
 # subset Seurat object by neuropeptide.genes
-sub.MSCneurons <- subset_by_gene(int.ldfs,
+sub.MSCneurons <- subset_by_gene(MSCneurons.reclust,
                                  neuropeptides.genes,
                                  slot = "counts",
                                  min_count = 2)
 
 # get presence/absence (1/0) for neuropeptide.genes
-umap = data.frame(int.ldfs@reductions$umap@cell.embeddings) %>%
+umap = data.frame(MSCneurons.reclust@reductions$umap@cell.embeddings) %>%
   rownames_to_column('Cell_ID')
 
-metadata = data.frame(int.ldfs@meta.data) %>%
+metadata = data.frame(MSCneurons.reclust@meta.data) %>%
   full_join(umap, by = "Cell_ID")
 
 sapply(
@@ -173,10 +172,10 @@ select_neur %>%
                  group = orig.ident),
              size = 2) +
   theme_classic() +
-  scale_color_manual(values = c("#CC5500",
-                                "#FF6A00",
-                                "#0077CC",
-                                "#0095FF")) +
+  scale_color_manual(values = c("#f94449", 
+                                "#408D8E",
+                                "#ff7d00", 
+                                "#7e38b7")) +
   xlab('') + ylab('% of neurons') +
   ggtitle('Percent nuclei expressing NP genes')
 
@@ -270,11 +269,10 @@ ggsave('neurons/neuropeptides/DEGneuropeptides_byCluster.png',
 
 
 # Oxt/Avp specifically - expression in pct of neurons by cluster
-sub.MSCneurons.reclust <- subset_by_gene(int.ldfs,
+sub.MSCneurons.reclust <- subset_by_gene(MSCneurons.reclust,
                                          c("Oxt", "Avp"),
-                                         slot = "data",
-                                         min_count = 0.5)
-
+                                         slot = "counts",
+                                         min_count = 2)
 
 
 # get presence/absence (1/0) for neuropeptide.genes

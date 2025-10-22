@@ -111,30 +111,6 @@ subset_by_gene <- function(seurat_obj,
                            min_count = 2) {
   
   gene_list <- lapply(subset_genes, function(gene) {
-    
-    counts <- GetAssayData(seurat_obj, slot = slot)[gene, ]
-    keep_cells <- names(counts[counts >= min_count])
-
-    cat(paste0(gene, ": ", length(keep_cells), " cells retained\n"))
-    
-    # Subset object
-    obj <- subset(seurat_obj, cells = keep_cells)
-    obj@project.name <- gene
-    obj 
-    
-  } )
-  
-  names(gene_list) <- subset_genes
-  return(gene_list)
-}
-
-
-subset_by_gene <- function(seurat_obj, 
-                           subset_genes, 
-                           slot = "counts",
-                           min_count = 2) {
-  
-  gene_list <- lapply(subset_genes, function(gene) {
     counts <- GetAssayData(seurat_obj, slot = slot)[gene, ]
     keep_cells <- names(counts[counts >= min_count])
     
@@ -1615,6 +1591,9 @@ get.RRHO <- function(results_list,
                      compare.across,
                      group.by,
                      new.max.log = NULL,
+                     filetype = ".png",
+                     analysis = NULL,
+                     img.params = list(res = 300, width = 10, height = 10, units = 'in'),
                      outdir = "./RRHO") {
   
   rrho_results <- list()
@@ -1768,15 +1747,33 @@ get.RRHO <- function(results_list,
       dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
     }
     
-    ggsave(file.path(out_dir, paste0("RedRibbon_concordance_by_", deparse(substitute(group.by)), ".png")),
-           plot = p1, height = 10, width = 10, dpi = 300)
+    if (is.null(analysis)) {
+      analysis = c("RRHO2", "RedRibbon")
+    } 
     
-    png(file.path(out_dir, paste0("RRHO2_concordance_by_", deparse(substitute(group.by)), ".png")),
-        height = 10, width = 10, units = "in", res = 300)
+    img = sub("\\.", "", filetype)
+    
+    if (grepl("RedRibbon", analysis)) {
+      filename = paste0("RedRibbon_concordance_by_", 
+                        deparse(substitute(group.by)), 
+                        filetype) %>% as.character()
+      args_RR = c(list(device = img,
+                       file = file.path(out_dir, filename),
+                       plot = p1), 
+                  img.params)
+      do.call(ggsave, args_RR)
+    }
+    
+    
+    if (grepl("RRHO2", analysis)) {
+    args_RRHO2 = list(file = file.path(out_dir, paste0("RRHO2_concordance_by_", deparse(substitute(group.by)), filetype)), unlist(img.params))
+    
+    do.call(img, args_RRHO2)
     
     plot.new()
     RRHO2_heatmap_axis.flip(rrho_obj)
     dev.off()
+    }
     
     cat("saving plots for subset:", dataset_name, "\n")
   }
@@ -2001,6 +1998,9 @@ plot.overlaps <- function(rrho_results_list,
 
 get.GOtop15.RRHO <- function(rrho_results_list,
                              quadrants_to_check = NULL,
+                             filetype = ".png",
+                             analysis = NULL,
+                             img.params = list(res = 300, width = 10, height = 10, units = 'in'),
                              outdir) {
   
   if(!is.list(rrho_results_list)) {
@@ -2011,8 +2011,16 @@ get.GOtop15.RRHO <- function(rrho_results_list,
     
     # extract names
     raw_name <- dat[[3]]  
-    set_name <- sub("\\..*$", "", raw_name)                
+    set_name <- sub("\\..*$", "", raw_name)    
+    
+    if (is.null(analysis)) {
     analysis <- sub(".*_", "", sub(".*\\.", "", raw_name))  
+    } else {
+      analysis = analysis 
+      if (grepl(analysis, raw_name) == FALSE) {
+        return(NULL)
+      }
+    }
     
     if(startsWith(outdir, "./")) {
       outdir <- sub("^\\./", "", outdir)
@@ -2043,29 +2051,46 @@ get.GOtop15.RRHO <- function(rrho_results_list,
       if(sum(GO.obj@result$p.adjust < 0.05) > 5) {
         
         # barplot
-        png(file.path(out_dir,
-                      paste(analysis,
-                            quad,
-                            "GO_results.png", 
-                            sep = "_")),
-            res = 300, width = 10, height = 10, units = 'in')
+        img = sub("\\.", "", filetype)
+        # args = list(file = file.path(out_dir,
+        #                              paste(analysis,
+        #                                    quad,
+        #                                    paste0("GO_results", filetype), 
+        #                                    sep = "_")), unlist(img.params))
+        
+        args = as.list(c(file = file.path(out_dir,
+                                          paste(analysis,
+                                                quad,
+                                                paste0("GO_results", filetype),
+                                                sep = "_")), img.params))
+        
+        do.call(img, args)
         
         print(barplot(GO.obj, showCategory = 15))
+        print(args)
         
         dev.off()
         cat("saved barplot for quadrant", quad, "\n")
         
         # treeplot
-        png(file.path(out_dir, 
-                      paste(analysis, 
-                            quad, 
-                            "GO_resultsTree.png", 
-                            sep = "_")),
-            res = 300, width = 13.5, height = 10, units = 'in')
+        # args = list(file = file.path(out_dir, 
+        #                              paste(analysis, 
+        #                                    quad, 
+        #                                    paste0("GO_resultsTree", filetype), 
+        #                                    sep = "_")), unlist(img.params))
+        
+        args = as.list(c(file = file.path(out_dir,
+                                          paste(analysis,
+                                                quad,
+                                                paste0("GO_resultsTree", filetype),
+                                                sep = "_")), img.params))
+        
+        do.call(img, args)
         
         suppressMessages({  print(GO.obj %>% 
                                     pairwise_termsim() %>% 
                                     treeplot())  })
+        print(args)
         
         dev.off()
         cat("saved treeplot for quadrant", quad, "\n")

@@ -1,0 +1,7 @@
+stat,all,cluster0,cluster1,cluster2,cluster3,cluster4,cluster5,cluster6,cluster7,cluster8,cluster9,typeGABA,typeGLU
+up_overlap,161,14,1,2,18,0,10,32,57,199,6,84,45
+up_Mdom,263,76,19,26,58,19,112,207,255,988,97,185,81
+up_Fdom,2004,469,111,964,918,291,983,1270,798,730,702,1473,1740
+down_overlap,53,2,0,4,6,2,11,4,7,8,1,27,18
+down_Mdom,146,41,16,26,36,21,41,59,177,100,45,100,69
+down_Fdom,888,146,47,140,97,153,149,124,290,191,133,748,392

@@ -83,24 +83,61 @@ subset_by_gene <- function(seurat_obj,
                            min_count = 2) {
   
   gene_list <- lapply(subset_genes, function(gene) {
-    
     counts <- GetAssayData(seurat_obj, slot = slot)[gene, ]
     keep_cells <- names(counts[counts >= min_count])
     
-    cat(paste0(gene, ": ", length(keep_cells), " cells retained\n"))
+    if (length(keep_cells) == 0) {
+      message(gene, ": skipped (0 cells retained)")
+      return(NULL)  # skip this gene
+    }
     
-    # Subset object
+    message(gene, ": ", length(keep_cells), " cells retained")
+    
     obj <- subset(seurat_obj, cells = keep_cells)
     obj@project.name <- gene
-    obj 
-    
-  } )
+    obj
+  })
   
-  names(gene_list) <- subset_genes
+  # Filter out NULLs 
+  keep_idx <- !sapply(gene_list, is.null)
+  gene_list <- gene_list[keep_idx]
+  names(gene_list) <- subset_genes[keep_idx]
+  
   return(gene_list)
 }
 
 #### network analysis and graphing functions ####
+
+# Function to plot MERs faceted by predictor
+plot_mer_facet <- function(mer_df, group) {
+  
+  p_est <- ggplot(mer_df, aes(x = interaction(Sex, Status), y = estimate, color = Status, shape = Sex)) +
+    geom_point(position = position_dodge(width = 0.5), size = 3) +
+    geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+                  width = 0.2,
+                  position = position_dodge(width = 0.5)) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    facet_wrap(~ term, scales = "free_x") +
+    labs(
+      x = "Sex × Status",
+      y = "Marginal Effect (MER)",
+      title = paste0("MER: ", group, " neurons")
+    ) +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  p_pred <- ggplot(mer, aes(x = interaction(Sex, Status), y = predicted, color = Status, shape = Sex)) +
+    geom_point(position = position_dodge(width = 0.5), size = 3) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    labs(y = "Predicted Neuron Proportion", x = "Sex × Status",
+         title = paste0("Predicted values: ", group, " neurons")) +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  return(grid.arrange(p_est, p_pred,
+                      widths = c(1, 0.6),
+                      nrow = 1))
+}
 
 # (old) function for limma_trend
 run_limmatrend_neuron_cluster <- function(L) {
